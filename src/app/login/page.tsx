@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 import { AuthPanel } from "@/components/shell/auth-panel";
+import { ClassCodeForm } from "@/components/shell/class-code-form";
 
 import { LoginForm } from "./login-form";
 
@@ -31,6 +32,17 @@ export default async function LoginPage({
       }
     >
       <LoginForm next={next} />
+
+      <div className="mt-4">
+        <div className="mb-3 flex items-center gap-3">
+          <span aria-hidden className="h-px flex-1 bg-hairline" />
+          <span className="text-[11px] uppercase tracking-wide text-ink-tertiary">
+            or
+          </span>
+          <span aria-hidden className="h-px flex-1 bg-hairline" />
+        </div>
+        <ClassCodeForm />
+      </div>
     </AuthPanel>
   );
 }

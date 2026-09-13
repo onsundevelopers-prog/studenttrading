@@ -9,6 +9,7 @@ import {
 import Link from "next/link";
 
 import { getSessionContext } from "@/lib/auth/session";
+import { ClassCodeForm } from "@/components/shell/class-code-form";
 import { Button } from "@/components/ui/button";
 import { Badge, Panel } from "@/components/ui/primitives";
 
@@ -69,13 +70,17 @@ export default async function HomePage() {
             window — then watch every portfolio and every trade as it happens.
           </p>
 
-          <div className="mt-8 flex flex-wrap items-center gap-3">
+          <div className="mt-8 flex max-w-md flex-wrap items-center gap-3">
             <Button asChild size="lg" variant="primary">
               <Link href="/signup">Create a classroom</Link>
             </Button>
             <Button asChild size="lg" variant="secondary">
               <Link href="/login">I have an account</Link>
             </Button>
+          </div>
+
+          <div className="mt-4 max-w-md">
+            <ClassCodeForm />
           </div>
 
           <p className="mt-4 text-[12px] text-ink-tertiary">

@@ -61,6 +61,24 @@ export const teacherSignupSchema = z.object({
 
 export const signInSchema = credentialsSchema;
 
+/** Class codes are uppercase, ambiguity-free, 4–10 characters (matches the DB CHECK). */
+export const joinCodeSchema = z
+  .string()
+  .trim()
+  .toUpperCase()
+  .regex(/^[A-Z0-9]{4,10}$/, "Enter the class code your teacher gave you.");
+
+/** Self-serve student signup: the class code plus the credentials the student picks. */
+export const studentSignupByCodeSchema = z.object({
+  classCode: joinCodeSchema,
+  fullName: z.string().trim().min(2, "Enter your name.").max(80),
+  handle: handleSchema,
+  password: z
+    .string()
+    .min(8, "Use at least 8 characters.")
+    .max(200, "That password is too long."),
+});
+
 export const createClassroomSchema = z.object({
   name: z.string().trim().min(2, "Name your classroom.").max(80),
   section: z.string().trim().max(40).optional().default(""),
