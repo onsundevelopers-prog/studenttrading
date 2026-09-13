@@ -61,7 +61,7 @@ export async function loadClassroomSettings(
   const { data } = await admin
     .from("class_settings")
     .select(
-      "classroom_id, trading_enabled, paused_reason, trading_opens_at, trading_closes_at, asset_policy, max_trade_value, max_position_percent, allow_fractional, allowed_order_types, enforce_market_hours, allow_extended_hours, crypto_enabled, short_selling_enabled, options_enabled, default_starting_capital",
+      "classroom_id, trading_enabled, paused_reason, trading_opens_at, trading_closes_at, asset_policy, max_trade_value, max_position_percent, allow_fractional, allowed_order_types, enforce_market_hours, allow_extended_hours, crypto_enabled, short_selling_enabled, options_enabled"
     )
     .eq("classroom_id", classroomId)
     .maybeSingle();
@@ -111,7 +111,10 @@ export async function loadPortfolio(
     p_classroom_id: classroomId,
     p_student_id: studentId,
   });
-  if (error) return null;
+  if (error) {
+    console.error("Failed to load portfolio:", error);
+    throw new Error(`Failed to load portfolio: ${error.message}`);
+  }
   return mapPortfolio(data);
 }
 
@@ -120,7 +123,10 @@ export async function loadLeaderboard(classroomId: string): Promise<LeaderboardR
   const { data, error } = await admin.rpc("get_leaderboard", {
     p_classroom_id: classroomId,
   });
-  if (error) return [];
+  if (error) {
+    console.error("Failed to load leaderboard:", error);
+    return [];
+  }
   return mapLeaderboard(data);
 }
 
@@ -131,7 +137,10 @@ export async function loadClassOverview(
   const { data, error } = await admin.rpc("get_class_overview", {
     p_classroom_id: classroomId,
   });
-  if (error) return null;
+  if (error) {
+    console.error("Failed to load class overview:", error);
+    return null;
+  }
   return mapClassOverview(data);
 }
 
@@ -146,7 +155,10 @@ export async function loadTradeHistory(options: {
     p_student_id: options.studentId ?? null,
     p_limit: options.limit ?? 100,
   });
-  if (error) return [];
+  if (error) {
+    console.error("Failed to load trade history:", error);
+    return [];
+  }
   return mapTradeHistory(data);
 }
 
