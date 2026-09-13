@@ -111,11 +111,27 @@ export async function loadPortfolio(
     p_classroom_id: classroomId,
     p_student_id: studentId,
   });
+  
   if (error) {
-    console.error("Failed to load portfolio:", error);
-    throw new Error(`Failed to load portfolio: ${error.message}`);
+    const errorMsg = `RPC get_portfolio failed: ${error.message}`;
+    console.error(errorMsg, { code: error.code, details: error.details });
+    throw new Error(errorMsg);
   }
-  return mapPortfolio(data);
+
+  if (!data) {
+    const errorMsg = "RPC get_portfolio returned null data - student may not exist or classroom may not be configured";
+    console.error(errorMsg, { classroomId, studentId });
+    throw new Error(errorMsg);
+  }
+
+  const portfolio = mapPortfolio(data);
+  if (!portfolio) {
+    const errorMsg = "Portfolio mapping failed - database response was invalid or missing required fields";
+    console.error(errorMsg, { rawData: JSON.stringify(data).substring(0, 500) });
+    throw new Error(errorMsg);
+  }
+
+  return portfolio;
 }
 
 export async function loadLeaderboard(classroomId: string): Promise<LeaderboardRow[]> {
