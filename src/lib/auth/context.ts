@@ -61,5 +61,9 @@ export const getStudentWorkspace = cache(async (): Promise<StudentWorkspace> => 
     }),
   ]);
 
+  if (!portfolio) {
+    throw new Error("Portfolio data could not be loaded or is invalid");
+  }
+
   return { session, classrooms, classroom, settings, portfolio };
 });
