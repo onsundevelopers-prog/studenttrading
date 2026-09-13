@@ -3,11 +3,11 @@
   "crons": [
     {
       "path": "/api/cron/sample",
-      "schedule": "*/5 * * * *"
+      "schedule": "0 6 * * *"
     },
     {
       "path": "/api/cron/match-orders",
-      "schedule": "* * * * *"
+      "schedule": "30 6 * * *"
     }
   ]
 }
