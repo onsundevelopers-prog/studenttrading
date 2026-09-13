@@ -55,7 +55,10 @@ export const getStudentWorkspace = cache(async (): Promise<StudentWorkspace> => 
 
   const [settings, portfolio] = await Promise.all([
     loadClassroomSettings(classroom.id),
-    loadPortfolio(classroom.id, session.userId),
+    loadPortfolio(classroom.id, session.userId).catch((error) => {
+      console.error("Portfolio load failed in workspace context:", error);
+      throw error;
+    }),
   ]);
 
   return { session, classrooms, classroom, settings, portfolio };
