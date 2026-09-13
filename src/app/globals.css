@@ -1,0 +1,229 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+/* ---------------------------------------------------------------------------
+   Design language: Linear (deep dark canvas, lavender accent, surface ladder)
+   with a financial-terminal information density.
+   Dark-only — there is deliberately no light theme.
+   --------------------------------------------------------------------------- */
+
+@custom-variant dark (&:is(.dark *));
+
+:root {
+  /* Surface ladder — hierarchy is carried by surface lift + hairlines, never
+     by drop shadows or gradients. */
+  --canvas: #010102;
+  --surface-1: #0f1011;
+  --surface-2: #141516;
+  --surface-3: #18191a;
+  --surface-4: #191a1b;
+
+  --hairline: #23252a;
+  --hairline-strong: #34343a;
+  --hairline-tertiary: #3e3e44;
+
+  /* Ink */
+  --ink: #f7f8f8;
+  --ink-muted: #d0d6e0;
+  --ink-subtle: #8a8f98;
+  --ink-tertiary: #62666d;
+
+  /* The single chromatic accent. Reserved for the brand mark, focus rings and
+     primary actions. */
+  --brand: #5e6ad2;
+  --brand-hover: #828fff;
+  --brand-focus: #5e69d1;
+
+  /* Semantics */
+  --pos: #2ebd59;
+  --pos-dim: #1f7f3c;
+  --neg: #e5484d;
+  --neg-dim: #93353a;
+  --warn: #f5a623;
+  --info: #5e6ad2;
+  /* Text on a solid semantic fill (the quote-row change pill). */
+  --on-pos: #04170c;
+  --on-neg: #1c0405;
+
+  /* shadcn/ui contract */
+  --background: var(--canvas);
+  --foreground: var(--ink);
+  --card: var(--surface-1);
+  --card-foreground: var(--ink);
+  --popover: var(--surface-2);
+  --popover-foreground: var(--ink);
+  --primary: var(--brand);
+  --primary-foreground: #ffffff;
+  --secondary: var(--surface-3);
+  --secondary-foreground: var(--ink);
+  --muted: var(--surface-2);
+  --muted-foreground: var(--ink-subtle);
+  --accent: var(--surface-3);
+  --accent-foreground: var(--ink);
+  --destructive: var(--neg);
+  --destructive-foreground: #ffffff;
+  --border: var(--hairline);
+  --input: var(--hairline);
+  --ring: var(--brand-focus);
+  --radius: 8px;
+}
+
+@theme inline {
+  --color-canvas: var(--canvas);
+  --color-surface-1: var(--surface-1);
+  --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
+  --color-surface-4: var(--surface-4);
+
+  --color-hairline: var(--hairline);
+  --color-hairline-strong: var(--hairline-strong);
+  --color-hairline-tertiary: var(--hairline-tertiary);
+
+  --color-ink: var(--ink);
+  --color-ink-muted: var(--ink-muted);
+  --color-ink-subtle: var(--ink-subtle);
+  --color-ink-tertiary: var(--ink-tertiary);
+
+  --color-brand: var(--brand);
+  --color-brand-hover: var(--brand-hover);
+
+  --color-pos: var(--pos);
+  --color-pos-dim: var(--pos-dim);
+  --color-neg: var(--neg);
+  --color-neg-dim: var(--neg-dim);
+  --color-warn: var(--warn);
+  --color-info: var(--info);
+  --color-on-pos: var(--on-pos);
+  --color-on-neg: var(--on-neg);
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-2xl: 24px;
+
+  /* Type scale with Linear's negative tracking on display sizes */
+  --text-display: 40px;
+  --text-display--line-height: 1.15;
+  --text-display--letter-spacing: -1px;
+  --text-headline: 28px;
+  --text-headline--line-height: 1.2;
+  --text-headline--letter-spacing: -0.6px;
+  --text-title: 22px;
+  --text-title--line-height: 1.25;
+  --text-title--letter-spacing: -0.4px;
+  --text-subhead: 18px;
+  --text-subhead--line-height: 1.4;
+  --text-subhead--letter-spacing: -0.15px;
+  --text-eyebrow: 11px;
+  --text-eyebrow--line-height: 1.3;
+  --text-eyebrow--letter-spacing: 0.6px;
+
+  --font-sans: var(--font-inter), ui-sans-serif, -apple-system,
+    BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: var(--font-mono-src), ui-monospace, SFMono-Regular, Menlo,
+    Consolas, "Liberation Mono", monospace;
+}
+
+@layer base {
+  * {
+    border-color: var(--hairline);
+  }
+
+  html {
+    color-scheme: dark;
+  }
+
+  body {
+    background-color: var(--canvas);
+    color: var(--ink);
+    font-feature-settings: "cv11", "ss01";
+    font-variation-settings: "opsz" 32;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* Focus ring is the brand accent, used scarcely. */
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 1px;
+  }
+
+  ::selection {
+    background-color: color-mix(in srgb, var(--brand) 35%, transparent);
+  }
+}
+
+@utility hairline-t {
+  border-top: 1px solid var(--hairline);
+}
+
+@utility hairline-b {
+  border-bottom: 1px solid var(--hairline);
+}
+
+@utility hairline-r {
+  border-right: 1px solid var(--hairline);
+}
+
+/* Every numeric column in a financial terminal must line up. */
+@utility num {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+}
+
+@utility no-scrollbar {
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+@utility eyebrow {
+  font-size: 11px;
+  line-height: 1.3;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  font-weight: 500;
+  color: var(--ink-tertiary);
+}
+
+/* Thin, dark scrollbars so panels keep their density. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--hairline-strong) transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+*::-webkit-scrollbar-thumb {
+  background-color: var(--hairline-strong);
+  border-radius: 9999px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}

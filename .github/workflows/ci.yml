@@ -1,0 +1,124 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# One run per branch: a new push supersedes the previous run instead of queueing.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Always runs. Needs no credentials and no network beyond npm, so it is the
+  # check that every push gets.
+  # ---------------------------------------------------------------------------
+  verify:
+    name: Lint, types, build, database tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          # Matches the version used in development; see the note in README.md.
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Build
+        run: npm run build
+        env:
+          # Placeholders on purpose. The app reads configuration at request time,
+          # never at module load, so a build only needs the variables to be
+          # present. Nothing here is deployed, and no artifact is uploaded — a
+          # real deployment must build with the real values, since NEXT_PUBLIC_
+          # variables are inlined into the client bundle.
+          NEXT_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: sb_publishable_placeholder
+          SUPABASE_SECRET_KEY: sb_secret_placeholder
+          FINNHUB_API_KEY: placeholder
+          CRON_SECRET: placeholder
+
+      # Runs the real migration against a real PostgreSQL (PGlite), so it
+      # exercises the trading engine, the money maths and RLS without needing a
+      # database server or any credentials.
+      - name: Database tests
+        run: npm run test:db
+
+  # ---------------------------------------------------------------------------
+  # Opt in by setting the repository variable CI_INTEGRATION to `true` and adding
+  # the secrets below. Skipped rather than failed when it is off, so the default
+  # experience for a fresh clone or a fork is green.
+  #
+  # This job writes to the project it is pointed at: it creates and deletes its
+  # own `[e2e]`-prefixed accounts and classroom. Point it at a dedicated
+  # project, never at one holding real class data.
+  # ---------------------------------------------------------------------------
+  integration:
+    name: Live project — schema, trade flow, page render
+    runs-on: ubuntu-latest
+    needs: verify
+    if: ${{ vars.CI_INTEGRATION == 'true' }}
+    env:
+      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY }}
+      SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
+      FINNHUB_API_KEY: ${{ secrets.FINNHUB_API_KEY }}
+      CRON_SECRET: ${{ secrets.CRON_SECRET }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+
+      # Confirms the migration is applied AND that the functions actually run.
+      # A function can exist and still be broken, which is how a broken
+      # get_class_overview() once reached a live database. Fails loudly here.
+      - name: Verify the schema
+        run: npm run check:db
+
+      # Creates its own classroom and students, then deletes them.
+      - name: End-to-end trade flow
+        run: npm run test:e2e
+
+      - name: Build
+        run: npm run build
+
+      # Server and smoke test share a step: a background process started in one
+      # step does not survive into the next.
+      - name: Page render smoke test
+        run: |
+          npm start -- -p 3000 > /tmp/server.log 2>&1 &
+          SERVER_PID=$!
+
+          for attempt in $(seq 1 30); do
+            if curl -sf http://localhost:3000/login > /dev/null; then
+              break
+            fi
+            sleep 2
+          done
+
+          set +e
+          npm run smoke -- --base=http://localhost:3000
+          STATUS=$?
+          set -e
+
+          kill "$SERVER_PID" 2>/dev/null || true
+          echo "--- server log (last 40 lines) ---"
+          tail -40 /tmp/server.log
+          exit $STATUS
