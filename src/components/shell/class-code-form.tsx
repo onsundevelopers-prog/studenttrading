@@ -11,10 +11,10 @@ import type { FormState } from "@/lib/actions/form-state";
 /**
  * Self-serve student entry: the class code a teacher hands out is enough to
  * join. Collapsed by default so the sign-in form stays the primary action;
- * expands into a short signup form — name, handle, password — and enrols the
- * student at the class's default capital, which is zero unless the teacher set
- * one. Nothing is invented here: the code decides the class, the class decides
- * the money.
+ * expands into a short signup form — name, username, password — and enrols the
+ * student with the class's default starting money, which is zero unless the
+ * teacher set one. Nothing is invented here: the code decides the class, the
+ * class decides the money.
  */
 export function ClassCodeForm() {
   const [open, setOpen] = useState(false);
@@ -75,7 +75,7 @@ export function ClassCodeForm() {
           </FieldGroup>
 
           <FieldGroup
-            label="Choose a handle"
+            label="Choose a username"
             htmlFor="joinHandle"
             hint="You will sign in with this. 2–32 characters: letters, numbers, dot, dash or underscore."
           >

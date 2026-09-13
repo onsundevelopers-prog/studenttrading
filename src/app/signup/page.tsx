@@ -11,7 +11,7 @@ export default function SignupPage() {
   return (
     <AuthPanel
       title="Create a classroom"
-      description="Set up a simulated market for your class. You choose the starting capital, the trading window and which assets are allowed."
+      description="Set up a simulated market for your class. You choose how much money students start with, when they may trade, and which investments are allowed."
       footer={
         <>
           Already have an account?{" "}

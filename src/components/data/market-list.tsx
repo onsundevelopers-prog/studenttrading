@@ -27,7 +27,7 @@ export type MarketRow = {
 export function MarketList({
   rows,
   assetHrefPrefix,
-  emptyTitle = "No assets to show.",
+  emptyTitle = "Nothing to show here yet.",
   emptyDescription,
 }: {
   rows: MarketRow[];
@@ -83,7 +83,7 @@ export function MarketList({
                   fluid
                   height={30}
                   points={history.map((point) => point.price)}
-                  ariaLabel={`${asset.displaySymbol} sampled price movement`}
+                  ariaLabel={`${asset.displaySymbol} recent price movement`}
                 />
               </span>
 
@@ -104,15 +104,15 @@ export function MarketList({
                   <>
                     <span
                       className="block num text-[15px] font-semibold text-ink-tertiary"
-                      title={row.failureReason ?? "No quote available"}
+                      title={row.failureReason ?? "No price is available for this investment right now."}
                     >
                       —
                     </span>
                     <span
                       className="mt-1 block text-[11px] text-ink-tertiary"
-                      title={row.failureReason ?? "No quote available"}
+                      title={row.failureReason ?? "No price is available for this investment right now."}
                     >
-                      unavailable
+                      no price
                     </span>
                   </>
                 )}

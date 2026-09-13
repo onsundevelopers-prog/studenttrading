@@ -70,13 +70,39 @@ const cryptoBars = await fetchAlpacaBars("BINANCE:BTCUSDT", { start, maxBars: 30
 step("BTC daily bars (v1beta3)", cryptoBars.length > 0, `${cryptoBars.length} bars`);
 
 // 4. Price history service wrapper (graceful degradation when unconfigured)
-const { getHistoricalBars } = await import("../src/lib/market/service");
-const serviceBars = await getHistoricalBars("AAPL", { days: 30 });
+// 5. Batched snapshots — the quote path the dashboards actually use.
+const { fetchAlpacaSnapshots } = await import("../src/lib/market/alpaca");
+const snapshotResult = await fetchAlpacaSnapshots(["AAPL", "MSFT", "BINANCE:BTCUSDT"]);
+const aaplSnapshot = snapshotResult.snapshots.find((s) => s.symbol === "AAPL");
 step(
-  "service getHistoricalBars",
-  serviceBars.length > 0,
-  `${serviceBars.length} bars mapped`,
+  "batched snapshots",
+  snapshotResult.snapshots.length === 3,
+  `${snapshotResult.snapshots.length} snapshots, unknown=${snapshotResult.unknown.length}`,
 );
+step(
+  "snapshot carries previous close and session OHLCV",
+  Boolean(
+    aaplSnapshot &&
+      aaplSnapshot.previousClose !== null &&
+      aaplSnapshot.dayOpen !== null &&
+      aaplSnapshot.dayHigh !== null &&
+      aaplSnapshot.dayLow !== null &&
+      aaplSnapshot.volume !== null,
+  ),
+  aaplSnapshot
+    ? `prevClose=${aaplSnapshot.previousClose} open=${aaplSnapshot.dayOpen} high=${aaplSnapshot.dayHigh} low=${aaplSnapshot.dayLow} vol=${aaplSnapshot.volume}`
+    : "missing",
+);
+
+const { getChartBars } = await import("../src/lib/market/service");
+for (const range of ["1D", "5D", "1M", "1Y"] as const) {
+  const bars = await getChartBars("AAPL", range, "stock");
+  step(
+    `service getChartBars ${range}`,
+    bars.length >= 2,
+    `${bars.length} bars mapped`,
+  );
+}
 
 console.log(failures === 0 ? "\nAll probes passed." : `\n${failures} probe(s) failed.`);
 process.exit(failures === 0 ? 0 : 1);

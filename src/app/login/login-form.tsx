@@ -10,8 +10,8 @@ import type { FormState } from "@/lib/actions/form-state";
 
 /**
  * One form for both roles. A teacher types their email; a student types the
- * handle their teacher issued. The server decides which is which and resolves a
- * handle to its internal account before talking to the auth service.
+ * username their teacher gave them. The server decides which is which and
+ * resolves a username to its internal account before talking to the auth service.
  */
 export function LoginForm({ next }: { next?: string }) {
   const [state, formAction, isPending] = useActionState<FormState, FormData>(
@@ -24,9 +24,9 @@ export function LoginForm({ next }: { next?: string }) {
       {next ? <input type="hidden" name="next" value={next} /> : null}
 
       <FieldGroup
-        label="Email or student handle"
+        label="Email or username"
         htmlFor="identifier"
-        hint="Teachers use their email. Students use the handle their teacher gave them, e.g. ada.lovelace"
+        hint="Teachers use their email. Students use the username their teacher gave them, e.g. ada.lovelace"
       >
         <Input
           id="identifier"

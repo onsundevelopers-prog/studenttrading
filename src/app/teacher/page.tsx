@@ -129,7 +129,7 @@ export default async function TeacherOverviewPage() {
             hint={`${formatPercent(averageReturn, { signed: true })} average return`}
           />
           <MetricTile
-            label="Class P/L"
+            label="Class Profit and Loss"
             tone={classPnl}
             value={formatSignedMoney(classPnl)}
             hint={`Against ${formatMoney(classCapital)} of capital`}
@@ -140,9 +140,9 @@ export default async function TeacherOverviewPage() {
             hint={`${tradingNow} have placed a trade`}
           />
           <MetricTile
-            label="Cash on hand"
+            label="Available Cash in Class"
             value={formatMoney(students.reduce((sum, s) => sum + s.cashBalance, 0))}
-            hint="Uninvested across the class"
+            hint="Not currently invested by any student"
           />
           <MetricTile
             label="Best performer"
@@ -169,7 +169,7 @@ export default async function TeacherOverviewPage() {
         <Panel className="lg:col-span-2">
           <PanelHeader
             title="Students"
-            description="Ranked by portfolio value. Every figure comes from the database."
+            description="Ranked by portfolio value. Every figure here comes from the class records."
             action={
               <Button asChild size="sm" variant="ghost">
                 <Link href="/teacher/students">
@@ -189,7 +189,7 @@ export default async function TeacherOverviewPage() {
         <div className="space-y-5">
           <Panel>
             <PanelHeader
-              title="Recent activity"
+              title="Recent Activity"
               action={
                 <Button asChild size="sm" variant="ghost">
                   <Link href="/teacher/activity">
@@ -203,7 +203,7 @@ export default async function TeacherOverviewPage() {
               trades={trades}
               showStudent
               emptyTitle="No trades yet."
-              emptyDescription="Buy and sell orders from your students will appear here as they are placed."
+              emptyDescription="Your students' buys and sells will appear here as they are placed."
             />
           </Panel>
 

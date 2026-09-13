@@ -77,9 +77,9 @@ export function SignupForm() {
       </div>
 
       <FieldGroup
-        label="Starting capital per student"
+        label="Money each student starts with"
         htmlFor="startingCapital"
-        hint="Virtual dollars, assigned when students are added. Leave 0 and grant funds per student instead."
+        hint="Virtual dollars, given to each student when they are added. Leave 0 and grant money per student instead."
       >
         <Input
           id="startingCapital"

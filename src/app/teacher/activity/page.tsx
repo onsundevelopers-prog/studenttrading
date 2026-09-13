@@ -74,7 +74,7 @@ export default async function TeacherActivityPage({
           trades={trades}
           showStudent
           emptyTitle="No trades recorded yet."
-          emptyDescription="Once students start placing orders they will appear here with the price and value the engine actually executed."
+          emptyDescription="Once students start placing orders they will appear here, with the price each trade was completed at."
         />
       </Panel>
     </div>

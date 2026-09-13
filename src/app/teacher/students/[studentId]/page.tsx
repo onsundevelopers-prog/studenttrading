@@ -101,25 +101,26 @@ export default async function TeacherStudentDetailPage({
 
       <Panel>
         <PanelHeader
-          title="Holdings"
-          description="Marked at the latest sampled price for each asset."
+          title="Investments"
+          description="Valued at the latest recorded price for each investment."
         />
         <HoldingsTable holdings={portfolio.holdings} />
       </Panel>
 
       <Panel>
-        <PanelHeader title="Trade history" />
+        <PanelHeader title="Transaction History" />
         <TransactionTable
           trades={trades}
-          emptyTitle="This student has not traded yet."
-          emptyDescription="Their orders will appear here as soon as they place one."
+          emptyTitle="This student hasn't traded yet."
+          emptyDescription="Their trades will appear here as soon as they place one."
         />
       </Panel>
 
       {portfolio.pricesIncomplete ? (
         <Notice tone="warn">
-          At least one position has no sampled price yet, so its cost basis is
-          being used. Use “Refresh prices” on the overview to fill the gap.
+          At least one investment has no current price yet, so the price the
+          student paid is being used instead. Use “Refresh prices” on the overview
+          to fill the gap.
         </Notice>
       ) : null}
     </div>

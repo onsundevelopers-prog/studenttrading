@@ -5,6 +5,7 @@ import {
   ClipboardList,
   Coins,
   LayoutDashboard,
+  Newspaper,
   SlidersHorizontal,
   Trophy,
   Users,
@@ -40,9 +41,10 @@ export const TEACHER_NAV: NavItem[] = [
 export const STUDENT_NAV: NavItem[] = [
   { href: "/student", label: "Portfolio", icon: LayoutDashboard, primary: true },
   { href: "/student/market", label: "Market", icon: ChartLine, primary: true },
-  { href: "/student/holdings", label: "Holdings", icon: Coins, primary: true },
+  { href: "/student/holdings", label: "Investments", icon: Coins, primary: true },
   { href: "/student/activity", label: "Activity", icon: Activity, primary: true },
   { href: "/student/watchlist", label: "Watchlist", icon: Bookmark },
+  { href: "/student/news", label: "News", icon: Newspaper },
   { href: "/student/leaderboard", label: "Leaderboard", icon: Trophy, primary: true },
 ];
 

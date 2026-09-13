@@ -72,7 +72,7 @@ export async function placeOrderAction(
   if (rateLimited(session.userId)) {
     return {
       ok: false,
-      message: "Too many orders in a short time. Wait a moment and try again.",
+      message: "You've placed a lot of orders very quickly. Wait a moment, then try again.",
     };
   }
 
@@ -108,7 +108,7 @@ export async function placeOrderAction(
     return {
       ok: false,
       message:
-        "The order could not be processed. Nothing was bought or sold. Please try again.",
+        "This order couldn't be completed, so nothing was bought or sold. Please try again.",
     };
   }
 
@@ -122,7 +122,12 @@ export async function placeOrderAction(
   } | null;
 
   if (!result?.ok) {
-    return { ok: false, message: result?.message ?? "That order was rejected." };
+    return {
+      ok: false,
+      message:
+        result?.message ??
+        "This order couldn't be completed. Check the details and try again.",
+    };
   }
 
   if (result.duplicate) {
@@ -147,7 +152,7 @@ export async function placeOrderAction(
       return {
         ok: false,
         message:
-          "Order placed, but no fresh price is available to execute it. It will fill on the next market update.",
+          "Your order was placed, but no current price is available to complete it. It will complete at the next price update.",
         orderId: result.order_id,
         status: "pending",
       };
@@ -162,7 +167,7 @@ export async function placeOrderAction(
       return {
         ok: false,
         message:
-          "Order placed, but execution was interrupted. Check your open orders.",
+          "Your order was placed, but it couldn't be completed. Check your orders waiting to complete.",
         orderId: result.order_id,
         status: "pending",
       };
@@ -191,8 +196,8 @@ export async function placeOrderAction(
       ok: true,
       message:
         fillResult?.status === "rejected"
-          ? "Order rejected at execution time."
-          : "Order accepted and working.",
+          ? "This order couldn't be completed. Nothing was bought or sold."
+          : "Order accepted and waiting to complete.",
       orderId: result.order_id,
       status: fillResult?.status ?? "pending",
     };
@@ -202,7 +207,7 @@ export async function placeOrderAction(
     orderType === "stop_limit" ? "stop-limit" : orderType === "limit" ? "limit" : "stop";
   return {
     ok: true,
-    message: `${typeLabel.charAt(0).toUpperCase() + typeLabel.slice(1)} order placed. It rests until your price is reached (or it expires).`,
+    message: `${typeLabel.charAt(0).toUpperCase() + typeLabel.slice(1)} order placed. It will wait until the market reaches your price, or until it expires.`,
     orderId: result.order_id,
     status: "pending",
   };
@@ -216,7 +221,7 @@ export async function cancelOrderAction(
 
   const orderId = String(formData.get("orderId") ?? "");
   if (!/^[0-9a-f-]{36}$/i.test(orderId)) {
-    return { ok: false, message: "That order could not be identified." };
+    return { ok: false, message: "That order couldn't be found." };
   }
 
   const admin = createAdminClient();
@@ -225,11 +230,17 @@ export async function cancelOrderAction(
     p_student_id: session.userId,
   });
 
-  if (error) return { ok: false, message: "Could not cancel that order. Please try again." };
+  if (error) return { ok: false, message: "That order couldn't be cancelled. Please try again." };
 
   const result = data as { ok: boolean; message?: string; status?: string } | null;
-  if (!result?.ok) return { ok: false, message: result?.message ?? "Could not cancel that order." };
+  if (!result?.ok) {
+    return { ok: false, message: result?.message ?? "That order couldn't be cancelled." };
+  }
 
   revalidatePath("/student", "layout");
-  return { ok: true, message: "Order cancelled.", status: "cancelled" };
+  return {
+    ok: true,
+    message: "Order cancelled. Any money or shares it was holding are available again.",
+    status: "cancelled",
+  };
 }

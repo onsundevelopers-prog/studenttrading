@@ -80,6 +80,32 @@ export const serverEnv = {
   get alpacaSecretKey() {
     return required("ALPACA_SECRET_KEY", process.env.ALPACA_SECRET_KEY);
   },
+  /**
+   * Alpha Vantage news key — server only. This provider takes its key as a
+   * query parameter rather than a header, so the URL carrying it must never
+   * reach a log line, an error message or a response body.
+   */
+  get alphaVantageApiKey() {
+    return required("ALPHA_VANTAGE_API_KEY", process.env.ALPHA_VANTAGE_API_KEY);
+  },
+  /**
+   * Ceiling on Alpha Vantage calls per UTC day.
+   *
+   * The free tier allows 25 requests/day *in total*, shared by every student in
+   * every classroom, so the app has to budget deliberately rather than discover
+   * the limit by hitting it. Raise this if the key is on a paid plan.
+   *
+   * An explicit `0` is honoured as "stop calling out entirely" — cached news is
+   * still served. Only an absent or unparseable value falls back to the default,
+   * so setting the variable to zero is a usable switch rather than a no-op.
+   */
+  get alphaVantageDailyBudget() {
+    const raw = process.env.ALPHA_VANTAGE_DAILY_BUDGET?.trim();
+    if (!raw) return 20;
+    const parsed = Number(raw);
+    if (!Number.isFinite(parsed) || parsed < 0) return 20;
+    return Math.min(Math.floor(parsed), 100000);
+  },
   /** Only the paper environment is supported, and only "true" is accepted. */
   get alpacaPaper() {
     const raw = (process.env.ALPACA_PAPER ?? "true").trim().toLowerCase();
@@ -102,4 +128,9 @@ export function hasAlpacaKeys(): boolean {
 
 export function hasFinnhubKey(): boolean {
   return Boolean(process.env.FINNHUB_API_KEY);
+}
+
+/** True when an Alpha Vantage key is present, without throwing. */
+export function hasAlphaVantageKey(): boolean {
+  return Boolean(process.env.ALPHA_VANTAGE_API_KEY?.trim());
 }

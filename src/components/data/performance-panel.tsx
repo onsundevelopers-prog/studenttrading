@@ -15,8 +15,8 @@ import type { PortfolioSnapshot } from "@/lib/types";
 /**
  * Portfolio value over time.
  *
- * The series is the `portfolio_snapshots` table and nothing else: a snapshot is
- * written on every fill and by the scheduled sampler. A brand-new account
+ * The series is the `portfolio_snapshots` table and nothing else: a value is
+ * recorded on every fill and by the scheduled sampler. A brand-new account
  * therefore shows one point, and the panel says exactly that rather than
  * drawing a plausible-looking curve.
  */
@@ -40,7 +40,7 @@ export function PerformancePanel({
         title={title}
         description={
           snapshots.length > 0
-            ? `${snapshots.length} recorded snapshot${snapshots.length === 1 ? "" : "s"} · from ${formatMoney(first.totalValue)} to ${formatMoney(last.totalValue)}`
+            ? `${snapshots.length} recorded value${snapshots.length === 1 ? "" : "s"} · from ${formatMoney(first.totalValue)} to ${formatMoney(last.totalValue)}`
             : undefined
         }
         action={refreshAction}
@@ -49,13 +49,13 @@ export function PerformancePanel({
         {snapshots.length === 0 ? (
           <EmptyState
             icon={<ChartLine className="size-5" />}
-            title="No portfolio history yet."
-            description="A snapshot is recorded every time you trade, and again whenever the simulator samples the market. The chart draws itself from those points — nothing here is estimated."
+            title="Your portfolio history will appear here."
+            description="Your portfolio value is recorded every time you trade and each time prices are refreshed. The chart is drawn from those records — nothing here is guessed."
             action={
               refreshAction ? (
                 <div className="flex items-center gap-2 text-[12px] text-ink-tertiary">
                   <RefreshCw className="size-3.5" />
-                  Use refresh above to record the first snapshot.
+                  Use refresh above to record the first value.
                 </div>
               ) : undefined
             }
@@ -64,8 +64,8 @@ export function PerformancePanel({
           <div className="space-y-3">
             <EmptyState
               icon={<ChartLine className="size-5" />}
-              title="One snapshot recorded."
-              description={`Portfolio value ${formatMoney(last.totalValue)} at ${new Date(last.capturedAt).toLocaleString()}. A trend needs at least two points, so no line is drawn yet.`}
+              title="Only one value recorded so far."
+              description={`Your portfolio was worth ${formatMoney(last.totalValue)} at ${new Date(last.capturedAt).toLocaleString()}. A trend needs at least two values, so no line is drawn yet.`}
             />
           </div>
         ) : (
@@ -74,9 +74,9 @@ export function PerformancePanel({
 
         {snapshots.length > 0 && snapshots.length < 3 ? (
           <Notice className="mt-4">
-            Only {snapshots.length} snapshot{snapshots.length === 1 ? "" : "s"} have
-            been recorded so far, so this line is very short. Trading, or
-            refreshing market data, adds more points.
+            Only {snapshots.length} value{snapshots.length === 1 ? "" : "s"} have been
+            recorded so far, so this line is very short. Trading, or refreshing
+            prices, adds more points.
           </Notice>
         ) : null}
       </PanelBody>
@@ -86,7 +86,7 @@ export function PerformancePanel({
 
 export function RefreshMarketButton({
   action,
-  label = "Record snapshot",
+  label = "Record Current Value",
 }: {
   action: (formData: FormData) => Promise<void>;
   label?: string;

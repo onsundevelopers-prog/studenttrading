@@ -6,18 +6,29 @@ import type { Portfolio } from "@/lib/types";
 /**
  * Headline portfolio figures.
  *
- * "Today's P/L" is only shown when a baseline snapshot actually exists. When it
- * does not, the tile says why instead of quietly showing the since-inception
- * number under a "today" label.
+ * "Today's Profit and Loss" is only shown when a baseline snapshot actually
+ * exists. When it does not, the tile says why instead of quietly showing the
+ * since-inception number under a "today" label.
  */
 export function PortfolioSummary({ portfolio }: { portfolio: Portfolio }) {
   const hasToday = portfolio.todayPnl !== null && portfolio.todayBasisKind !== "none";
 
   const todayHint = !hasToday
-    ? "Recorded once a prior day's snapshot exists."
+    ? "Shown once a previous day's portfolio value has been recorded."
     : portfolio.todayBasisKind === "prior_close"
-      ? `Since yesterday's close (${new Date(portfolio.todayBasisAt ?? "").toLocaleDateString("en-US", { month: "short", day: "numeric" })})`
-      : "Since the first recorded snapshot.";
+      ? `Compared with yesterday's closing value (${new Date(portfolio.todayBasisAt ?? "").toLocaleDateString("en-US", { month: "short", day: "numeric" })})`
+      : "Compared with the first value recorded for this portfolio.";
+
+  /**
+   * Once the sign is known, "Today's Profit" or "Today's Loss" says more than
+   * the general term does — the label now matches the number beside it.
+   */
+  const todayLabel =
+    hasToday && portfolio.todayPnl !== null && portfolio.todayPnl !== 0
+      ? portfolio.todayPnl > 0
+        ? "Today's Profit"
+        : "Today's Loss"
+      : "Today's Profit and Loss";
 
   return (
     <div className="space-y-3">
@@ -32,11 +43,11 @@ export function PortfolioSummary({ portfolio }: { portfolio: Portfolio }) {
               className="text-[13px]"
             />
           }
-          hint={`Cash ${formatMoney(portfolio.cashBalance)} · Positions ${formatMoney(portfolio.holdingsMarketValue)}`}
+          hint={`Available cash ${formatMoney(portfolio.cashBalance)} · Investments worth ${formatMoney(portfolio.holdingsMarketValue)}`}
         />
 
         <MetricTile
-          label="Today's P/L"
+          label={todayLabel}
           tone={hasToday ? portfolio.todayPnl : undefined}
           value={
             hasToday ? (
@@ -56,24 +67,24 @@ export function PortfolioSummary({ portfolio }: { portfolio: Portfolio }) {
         />
 
         <MetricTile
-          label="Total P/L"
+          label="Total Profit and Loss"
           tone={portfolio.totalPnl}
           value={formatSignedMoney(portfolio.totalPnl)}
           aside={
             <span className="text-[12px] text-ink-tertiary">
-              vs {formatMoney(portfolio.initialCapital)} start
+              starting with {formatMoney(portfolio.initialCapital)}
             </span>
           }
           hint={
-            <span className="flex flex-wrap gap-x-2">
-              <span>
-                Realised{" "}
+            <span className="flex flex-wrap gap-x-3 gap-y-0.5">
+              <span title="Profit or loss you locked in when you sold an investment">
+                Profit/Loss from Sold Investments{" "}
                 <span className="num text-ink-subtle">
                   {formatSignedMoney(portfolio.realizedPnl)}
                 </span>
               </span>
-              <span>
-                Unrealised{" "}
+              <span title="Profit or loss you would make if you sold your investments at the current price">
+                Potential Profit/Loss{" "}
                 <span className="num text-ink-subtle">
                   {formatSignedMoney(portfolio.unrealizedPnl)}
                 </span>
@@ -83,22 +94,23 @@ export function PortfolioSummary({ portfolio }: { portfolio: Portfolio }) {
         />
 
         <MetricTile
-          label="Cash available"
+          label="Available Cash"
           value={formatMoney(portfolio.cashBalance)}
+          tooltip="Money you currently have available to invest."
           hint={
             portfolio.initialCapital > 0
-              ? `${formatPercent((portfolio.cashBalance / portfolio.initialCapital) * 100, { digits: 0 })} of starting capital`
+              ? `${formatPercent((portfolio.cashBalance / portfolio.initialCapital) * 100, { digits: 0 })} of the money you started with`
               : undefined
           }
         />
 
         <MetricTile
-          label="Trades placed"
+          label="Trades Placed"
           value={portfolio.tradeCount}
           hint={
             portfolio.lastTradeAt
-              ? `Last ${new Date(portfolio.lastTradeAt).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}`
-              : "No trades yet"
+              ? `Last trade ${new Date(portfolio.lastTradeAt).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}`
+              : "You haven't traded yet"
           }
           aside={
             <PriceChange
@@ -112,9 +124,10 @@ export function PortfolioSummary({ portfolio }: { portfolio: Portfolio }) {
 
       {portfolio.pricesIncomplete ? (
         <Notice tone="warn">
-          Some holdings have no sampled price yet, so their cost basis is being
-          used and the figures above understate or overstate the true value. Open
-          the asset to trigger a price fetch.
+          Some of your investments don&apos;t have a current price yet, so the
+          price you paid for them is being used instead. That can make the figures
+          above too high or too low. Open the investment to fetch its latest
+          price.
         </Notice>
       ) : null}
     </div>

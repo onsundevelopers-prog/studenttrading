@@ -86,8 +86,8 @@ export function ClassSettingsForm({
             <Checkbox
               name="tradingEnabled"
               value="on"
-              label="Trading enabled"
-              hint="Turn this off to pause the market for the whole class instantly."
+              label="Allow trading"
+              hint="Turn this off to pause buying and selling for the whole class straight away."
               defaultChecked={settings.tradingEnabled}
             />
             <FieldGroup
@@ -152,9 +152,9 @@ export function ClassSettingsForm({
               />
             </FieldGroup>
             <FieldGroup
-              label="Concentration limit"
+              label="Limit per investment"
               htmlFor="maxPositionPercent"
-              hint="Maximum share of the portfolio in one asset, as a percentage."
+              hint="The most a student's portfolio may have in one investment, as a percentage."
             >
               <Input
                 id="maxPositionPercent"
@@ -172,9 +172,9 @@ export function ClassSettingsForm({
 
           <div className="grid gap-4 sm:grid-cols-2">
             <FieldGroup
-              label="Permitted assets"
+              label="Which investments students may trade"
               htmlFor="assetPolicy"
-              hint="An allow-list restricts trading to the assets you select below."
+              hint="Choosing “Only the investments I allow” restricts trading to the ones you tick below."
             >
               <Select
                 id="assetPolicy"
@@ -251,15 +251,15 @@ export function ClassSettingsForm({
               <Checkbox
                 name="shortSellingEnabled"
                 value="on"
-                label="Allow short selling (flag only)"
-                hint="Recorded as a class preference; the engine does not support shorts yet."
+                label="Allow short selling (preference only)"
+                hint="Saved as a class preference only — this simulator cannot short sell yet."
                 defaultChecked={settings.shortSellingEnabled}
               />
               <Checkbox
                 name="optionsEnabled"
                 value="on"
-                label="Allow options (flag only)"
-                hint="Recorded as a class preference; the engine does not support options."
+                label="Allow options (preference only)"
+                hint="Saved as a class preference only — this simulator does not support options."
                 defaultChecked={settings.optionsEnabled}
               />
             </div>
@@ -321,8 +321,8 @@ export function AssetAllowlistForm({
   return (
     <Panel>
       <PanelHeader
-        title="Permitted assets"
-        description="Only applied when the permitted-assets rule above is set to an allow-list."
+        title="Investments you allow"
+        description="Used only while the rule above is set to “Only the investments I allow”."
       />
       <form action={formAction}>
         <PanelBody className="space-y-3">
@@ -365,7 +365,7 @@ export function AssetAllowlistForm({
               ))}
               {visible.length === 0 ? (
                 <li className="px-3 py-4 text-[12px] text-ink-tertiary">
-                  No assets match that filter.
+                  Nothing matches that filter.
                 </li>
               ) : null}
             </ul>
@@ -376,8 +376,8 @@ export function AssetAllowlistForm({
           <div className="flex items-center justify-between gap-3">
             <p className="text-[11px] text-ink-tertiary">
               {selectedIds.length === 0
-                ? "Nothing selected — with an allow-list active, no asset can be traded."
-                : `${selectedIds.length} asset${selectedIds.length === 1 ? "" : "s"} currently permitted.`}
+                ? "Nothing is selected — while this list is active, students cannot trade anything."
+                : `${selectedIds.length} investment${selectedIds.length === 1 ? "" : "s"} currently allowed.`}
             </p>
             <Button type="submit" variant="primary" size="md" disabled={pending}>
               {pending ? (
@@ -436,7 +436,7 @@ export function ResetClassroomDialog({
       <DialogContent>
         <DialogHeader
           title="Reset the whole simulation"
-          description={`This deletes every trade, position and snapshot for all ${studentCount} students in this classroom and returns each of them to their starting capital. It cannot be undone.`}
+          description={`This deletes every trade, investment and recorded portfolio value for all ${studentCount} students in this classroom, and gives each of them back the money they started with. It cannot be undone.`}
         />
         <form action={formAction} className="space-y-3">
           <input type="hidden" name="classroomId" value={classroomId} />
@@ -445,9 +445,9 @@ export function ResetClassroomDialog({
             simulation.
           </Notice>
           <FieldGroup
-            label="Starting capital for the new simulation"
+            label="Money each student starts the new simulation with"
             htmlFor="resetStartingCapital"
-            hint="Leave blank to keep each student's existing starting capital."
+            hint="Leave blank to keep each student's current starting amount."
           >
             <Input
               id="resetStartingCapital"

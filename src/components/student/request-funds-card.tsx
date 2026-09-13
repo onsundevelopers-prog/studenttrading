@@ -36,12 +36,12 @@ export function RequestFundsCard({
   return (
     <Panel>
       <PanelHeader
-        title="Class bank"
-        description="Request more capital. Your teacher approves or denies it."
+        title="Class Bank"
+        description="Request more virtual money to invest. Your teacher approves or declines it."
       />
       <div className="space-y-4 p-4">
         <div className="flex items-baseline justify-between">
-          <span className="text-[12px] text-ink-tertiary">Your cash</span>
+          <span className="text-[12px] text-ink-tertiary">Available Cash</span>
           <span className="num text-[15px] font-medium text-ink">
             {formatMoney(cashBalance)}
           </span>
@@ -64,7 +64,7 @@ export function RequestFundsCard({
             <FieldGroup
               label="Amount (virtual dollars)"
               htmlFor="fundAmount"
-              hint="How much you want to withdraw from the class bank."
+              hint="How much virtual money you want from the class bank."
             >
               <Input
                 id="fundAmount"
@@ -82,7 +82,7 @@ export function RequestFundsCard({
             <FieldGroup
               label="Reason (optional)"
               htmlFor="fundReason"
-              hint="What you plan to do with it."
+              hint="What you plan to invest it in."
             >
               <Textarea
                 id="fundReason"
@@ -123,7 +123,7 @@ export function RequestFundsCard({
               ) : (
                 <>
                   <Banknote />
-                  Request funds
+                  Request Money
                 </>
               )}
             </Button>

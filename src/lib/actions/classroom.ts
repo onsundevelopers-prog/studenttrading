@@ -478,7 +478,7 @@ export async function adjustCashAction(
   }
 
   revalidateTeacher();
-  return formSuccess("Balance adjusted. Recorded in the cash ledger.");
+  return formSuccess("Balance adjusted. The change was recorded in the class record.");
 }
 
 export async function resetStudentAction(
@@ -513,7 +513,7 @@ export async function resetStudentAction(
   if (!result?.ok) return formError(result?.message ?? "Could not reset that portfolio.");
 
   revalidateTeacher();
-  return formSuccess("Portfolio reset. Positions and trade history cleared.");
+  return formSuccess("Portfolio reset. Investments and trade history cleared.");
 }
 
 export async function resetClassroomAction(
@@ -634,7 +634,7 @@ export async function refreshMarketDataAction(
   }
 
   return formSuccess(
-    `Refreshed ${result.sampled} price${result.sampled === 1 ? "" : "s"} and recorded ${result.snapshotted} portfolio snapshot${result.snapshotted === 1 ? "" : "s"}.`,
+    `Refreshed ${result.sampled} price${result.sampled === 1 ? "" : "s"} and recorded ${result.snapshotted} portfolio value${result.snapshotted === 1 ? "" : "s"}.`,
   );
 }
 

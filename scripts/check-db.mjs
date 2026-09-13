@@ -61,6 +61,9 @@ const EXPECTED_TABLES = [
   "price_history",
   "price_cache",
   "audit_log",
+  // 0006 — news cache and the shared Alpha Vantage call counter.
+  "news_cache",
+  "api_quota",
 ];
 
 const EXPECTED_FUNCTIONS = [
@@ -76,6 +79,9 @@ const EXPECTED_FUNCTIONS = [
   "reset_student_portfolio",
   "reset_classroom",
   "upsert_asset",
+  // 0006
+  "consume_api_quota",
+  "remaining_api_quota",
 ];
 
 async function head(path) {
@@ -190,6 +196,8 @@ const READ_PROBES = [
   ["get_leaderboard", { p_classroom_id: NIL_UUID }],
   ["get_portfolio", { p_classroom_id: NIL_UUID, p_student_id: NIL_UUID }],
   ["get_trade_history", { p_classroom_id: NIL_UUID, p_student_id: null, p_limit: 1 }],
+  // Read-only, and consuming nothing: it reports the day's remaining budget.
+  ["remaining_api_quota", { p_provider: "alpha_vantage", p_limit: 1 }],
 ];
 
 const brokenFunctions = [];
@@ -236,18 +244,56 @@ if (rpcNames !== null) {
 }
 
 if (missingTables.length > 0 || functionsIncomplete || brokenFunctions.length > 0) {
-  if (missingTables.length > 0 || functionsIncomplete) {
+  const newsObjectsMissing =
+    missingTables.includes("news_cache") ||
+    missingTables.includes("api_quota") ||
+    EXPECTED_FUNCTIONS.some(
+      (fn) =>
+        (fn === "consume_api_quota" || fn === "remaining_api_quota") &&
+        rpcNames !== null &&
+        !rpcNames.has(fn),
+    );
+
+  const NEWS_TABLES = ["news_cache", "api_quota"];
+  const NEWS_FUNCTIONS = ["consume_api_quota", "remaining_api_quota"];
+
+  // Anything missing that 0001 is responsible for. Missing only the news objects
+  // is a different situation with a different fix, so it is reported separately
+  // rather than buried under "run 0001", which the user may already have done.
+  const otherObjectsMissing =
+    missingTables.some((table) => !NEWS_TABLES.includes(table)) ||
+    (rpcNames !== null &&
+      EXPECTED_FUNCTIONS.some(
+        (fn) => !NEWS_FUNCTIONS.includes(fn) && !rpcNames.has(fn),
+      ));
+
+  if (otherObjectsMissing) {
     console.log(
       "\n\u001b[1mAction required:\u001b[0m open the Supabase dashboard → SQL Editor → New query, paste the\n" +
         "contents of supabase/migrations/0001_init.sql, and run it. Then re-run npm run check:db.\n",
     );
-  } else {
+  }
+
+  if (brokenFunctions.length > 0) {
     console.log(
-      "\n\u001b[1mAction required:\u001b[0m the schema is present but a function is out of date. Paste\n" +
-        "supabase/migrations/0002_fix_class_overview.sql into the Supabase SQL editor and\n" +
-        "run it, then re-run npm run check:db.\n",
+      "\n\u001b[1mAction required:\u001b[0m an object exists but is out of date. Paste the relevant\n" +
+        "migration from supabase/migrations/ into the Supabase SQL editor and run it —\n" +
+        "0002_fix_class_overview.sql for the overview above — then re-run npm run check:db.\n" +
+        "Every migration is safe to re-run.\n",
     );
   }
+
+  if (newsObjectsMissing) {
+    console.log(
+      "\n\u001b[1mAction required:\u001b[0m the news cache is not installed. Open the Supabase\n" +
+        "dashboard → SQL Editor → New query, paste the contents of\n" +
+        "supabase/migrations/0006_news.sql, and run it. News works without it (using an\n" +
+        "in-process cache), but the cache stops being shared between instances and the\n" +
+        "daily Alpha Vantage budget stops being enforced across them. Then re-run\n" +
+        "npm run check:db.\n",
+    );
+  }
+
   process.exit(1);
 }
 

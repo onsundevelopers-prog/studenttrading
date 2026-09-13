@@ -31,8 +31,8 @@ export default async function TeacherLeaderboardPage() {
         <div>
           <h1 className="text-title font-medium text-ink">Leaderboard</h1>
           <p className="mt-1.5 text-[12px] text-ink-tertiary">
-            Ranked by total portfolio value — cash plus positions marked at the
-            latest sampled price.
+            Ranked by total portfolio value: available cash plus investments,
+            valued at the latest price.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -50,7 +50,10 @@ export default async function TeacherLeaderboardPage() {
       </header>
 
       <Panel>
-        <PanelHeader title="Standings" description="Updated whenever prices are sampled." />
+        <PanelHeader
+          title="Standings"
+          description="Updated each time prices are refreshed."
+        />
         <LeaderboardTable rows={rows} />
       </Panel>
     </div>

@@ -84,7 +84,7 @@ export default async function TeacherStudentsPage() {
       <Panel>
         <PanelHeader
           title="Class roster"
-          description="Per-student portfolio value, cash, P/L and activity. Use the row menu to adjust balances, reset a portfolio or issue a new password."
+          description="Each student's portfolio value, available cash, profit and loss, and activity. Use the row menu to adjust a balance, reset a portfolio or issue a new password."
         />
         <StudentTable
           students={students}

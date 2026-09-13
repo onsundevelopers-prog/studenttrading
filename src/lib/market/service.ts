@@ -13,9 +13,12 @@ import {
 } from "./finnhub";
 import {
   fetchAlpacaBars,
-  fetchAlpacaQuotes,
+  fetchAlpacaSnapshots,
   isAlpacaConfigured,
+  type AlpacaSnapshot,
 } from "./alpaca";
+import { type ChartRange } from "./ranges";
+import { INDEX_ETFS, OVERVIEW_SYMBOLS } from "./universe";
 
 /**
  * The only place in the application that talks to a market data provider.
@@ -30,8 +33,13 @@ export const QUOTE_TTL_SECONDS = 60;
 /** Minimum gap between two price_history samples for the same asset. */
 export const HISTORY_SAMPLE_SECONDS = 300;
 
+/**
+ * Shown to students when no market data provider is configured. It deliberately
+ * avoids naming environment variables: a student cannot act on that, and it is
+ * the operator, not the student, who has to fix it.
+ */
 export const MARKET_UNCONFIGURED_MESSAGE =
-  "Market data is not configured. Set FINNHUB_API_KEY in your environment.";
+  "Live market data isn't set up yet, so prices can't be shown. Ask your teacher to finish setting up the market data source.";
 
 export type ExtendedQuote = Quote & {
   bid: number | null;
@@ -59,7 +67,7 @@ type FreshQuote = {
 export { isMarketDataConfigured };
 
 export const MARKET_UNAVAILABLE_MESSAGE =
-  "Market data is temporarily unavailable. Please try again shortly.";
+  "Live market data is temporarily unavailable. Please try again shortly.";
 
 export type QuoteResult =
   | { ok: true; quote: Quote }
@@ -89,6 +97,48 @@ export function normalizeSymbol(symbol: string): string {
 
 function ageSeconds(iso: string): number {
   return (Date.now() - new Date(iso).getTime()) / 1000;
+}
+
+/**
+ * Turns a provider snapshot into the internal quote shape. Every field the
+ * spec asks for (previous close, open, high, low, volume) is real provider data
+ * — nothing here is derived from a guess.
+ */
+function snapshotToFreshQuote(snapshot: AlpacaSnapshot): FreshQuote {
+  const previousClose = snapshot.previousClose;
+  return {
+    symbol: snapshot.symbol,
+    price: snapshot.price,
+    change: previousClose !== null ? snapshot.price - previousClose : null,
+    changePercent:
+      previousClose !== null && previousClose > 0
+        ? ((snapshot.price - previousClose) / previousClose) * 100
+        : null,
+    previousClose,
+    dayHigh: snapshot.dayHigh,
+    dayLow: snapshot.dayLow,
+    dayOpen: snapshot.dayOpen,
+    providerTime: snapshot.providerTime,
+    bid: snapshot.bid,
+    ask: snapshot.ask,
+    volume: snapshot.volume,
+  };
+}
+
+function freshQuoteToQuote(fresh: FreshQuote): Quote {
+  return {
+    symbol: fresh.symbol,
+    price: fresh.price,
+    change: fresh.change,
+    changePercent: fresh.changePercent,
+    previousClose: fresh.previousClose,
+    dayHigh: fresh.dayHigh,
+    dayLow: fresh.dayLow,
+    dayOpen: fresh.dayOpen,
+    providerTime: fresh.providerTime?.toISOString() ?? null,
+    fetchedAt: new Date().toISOString(),
+    stale: false,
+  };
 }
 
 function rowToQuote(row: CachedPriceRow, stale: boolean): Quote {
@@ -121,7 +171,27 @@ async function readCachedQuote(symbol: string): Promise<CachedPriceRow | null> {
   return (data as CachedPriceRow | null) ?? null;
 }
 
-async function cacheQuote(quote: {
+/** One query for many cached quotes — used by the batched dashboard paths. */
+async function readCachedQuotes(
+  symbols: string[],
+): Promise<Map<string, CachedPriceRow>> {
+  const map = new Map<string, CachedPriceRow>();
+  if (symbols.length === 0) return map;
+
+  const db = createAdminClient();
+  const { data, error } = await db
+    .from("price_cache")
+    .select(
+      "symbol, price, previous_close, change, change_percent, day_high, day_low, day_open, provider_time, fetched_at",
+    )
+    .in("symbol", symbols);
+
+  if (error) return map;
+  for (const row of (data ?? []) as CachedPriceRow[]) map.set(row.symbol, row);
+  return map;
+}
+
+type CacheableQuote = {
   symbol: string;
   price: number;
   previousClose: number | null;
@@ -131,26 +201,37 @@ async function cacheQuote(quote: {
   dayLow: number | null;
   dayOpen: number | null;
   providerTime: Date | null;
-}): Promise<void> {
+};
+
+function cacheRow(quote: CacheableQuote) {
+  return {
+    symbol: quote.symbol,
+    // Numeric columns: pass strings so no float rounding creeps in.
+    price: quote.price.toString(),
+    previous_close: quote.previousClose?.toString() ?? null,
+    change: quote.change?.toString() ?? null,
+    change_percent: quote.changePercent?.toString() ?? null,
+    day_high: quote.dayHigh?.toString() ?? null,
+    day_low: quote.dayLow?.toString() ?? null,
+    day_open: quote.dayOpen?.toString() ?? null,
+    provider_time: quote.providerTime?.toISOString() ?? null,
+    fetched_at: new Date().toISOString(),
+    last_error: null,
+    error_at: null,
+  };
+}
+
+/** One upsert for a whole batch — a forty-row dashboard writes one statement. */
+async function cacheQuotes(quotes: CacheableQuote[]): Promise<void> {
+  if (quotes.length === 0) return;
   const db = createAdminClient();
-  await db.from("price_cache").upsert(
-    {
-      symbol: quote.symbol,
-      // Numeric columns: pass strings so no float rounding creeps in.
-      price: quote.price.toString(),
-      previous_close: quote.previousClose?.toString() ?? null,
-      change: quote.change?.toString() ?? null,
-      change_percent: quote.changePercent?.toString() ?? null,
-      day_high: quote.dayHigh?.toString() ?? null,
-      day_low: quote.dayLow?.toString() ?? null,
-      day_open: quote.dayOpen?.toString() ?? null,
-      provider_time: quote.providerTime?.toISOString() ?? null,
-      fetched_at: new Date().toISOString(),
-      last_error: null,
-      error_at: null,
-    },
-    { onConflict: "symbol" },
-  );
+  await db
+    .from("price_cache")
+    .upsert(quotes.map(cacheRow), { onConflict: "symbol" });
+}
+
+async function cacheQuote(quote: CacheableQuote): Promise<void> {
+  await cacheQuotes([quote]);
 }
 
 async function recordCacheError(symbol: string, message: string): Promise<void> {
@@ -174,39 +255,157 @@ export type HistoricalBar = {
   volume: number;
 };
 
+type AlpacaBarShim = { t: string; o: number; h: number; l: number; c: number; v: number };
+
+function toHistoricalBar(bar: AlpacaBarShim): HistoricalBar {
+  return {
+    time: bar.t,
+    open: bar.o,
+    high: bar.h,
+    low: bar.l,
+    close: bar.c,
+    volume: bar.v,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Chart ranges (the range list itself lives in ./ranges, which is client-safe)
+// ---------------------------------------------------------------------------
+const DAY_MS = 86_400_000;
+/** Oldest history the free IEX feed actually serves, so MAX is bounded. */
+const MAX_HISTORY_START_MS = Date.UTC(2016, 0, 1);
+
+type RangeSpec = {
+  timeframe: string;
+  sinceMs: number;
+  maxBars: number;
+  /**
+   * Keep only the most recent N trading sessions.
+   *
+   * A trailing-window fetch is the only way to ask a provider for "the last
+   * day", but a window that happens to fall on a weekend, a holiday or before
+   * the open contains no bars at all. Trimming to the latest sessions is what
+   * makes 1D mean "the most recent session" — which is what a terminal shows and
+   * what a student expects on a Saturday.
+   */
+  sessions?: number;
+};
+
+const easternDateFormatter = new Intl.DateTimeFormat("en-CA", {
+  timeZone: "America/New_York",
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+});
+
+/** The trading date a bar belongs to, in exchange time. */
+function easternDate(iso: string): string {
+  const parsed = new Date(iso);
+  return Number.isNaN(parsed.getTime()) ? iso : easternDateFormatter.format(parsed);
+}
+
+function trimToRecentSessions(
+  bars: HistoricalBar[],
+  sessions: number,
+): HistoricalBar[] {
+  if (bars.length === 0) return bars;
+  const dates = Array.from(new Set(bars.map((bar) => easternDate(bar.time)))).sort();
+  const keep = new Set(dates.slice(-sessions));
+  return bars.filter((bar) => keep.has(easternDate(bar.time)));
+}
+
 /**
- * Real daily bars for a symbol, from Alpaca when configured. Returns an empty
- * array when the provider has no history — the UI falls back to the sampled
- * price_history series rather than inventing data.
+ * Which provider timeframe each range is drawn from. Intraday is used only
+ * where the extra resolution is meaningful, and daily/weekly bars keep the long
+ * ranges light enough to render and cheap enough to stay inside the rate limit.
  */
-export async function getHistoricalBars(
-  symbol: string,
-  options: { days: number } = { days: 365 },
-): Promise<HistoricalBar[]> {
-  if (!isAlpacaConfigured()) return [];
-
-  const start = new Date();
-  start.setDate(start.getDate() - options.days);
-  start.setHours(0, 0, 0, 0);
-
-  try {
-    const bars = await fetchAlpacaBars(symbol, { start, maxBars: options.days + 5 });
-    return bars.map((bar: AlpacaBarShim) => ({
-      time: bar.t,
-      open: bar.o,
-      high: bar.h,
-      low: bar.l,
-      close: bar.c,
-      volume: bar.v,
-    }));
-  } catch {
-    // Historical data is a UI enhancement; a failure must not take down the
-    // stock page. The sampled series still renders.
-    return [];
+function rangeSpec(range: ChartRange, assetType: AssetType): RangeSpec {
+  switch (range) {
+    case "1D":
+      // Request a week so a weekend or holiday cannot empty the chart, then keep
+      // the most recent session.
+      return { timeframe: "5Min", sinceMs: 7 * DAY_MS, maxBars: 900, sessions: 1 };
+    case "5D":
+      return { timeframe: "15Min", sinceMs: 12 * DAY_MS, maxBars: 900, sessions: 5 };
+    case "1M":
+      // Crypto trades around the clock, so a month of hourly bars is 700+ points
+      // of noise; daily bars read far better.
+      return assetType === "crypto"
+        ? { timeframe: "1Day", sinceMs: 30 * DAY_MS, maxBars: 40 }
+        : { timeframe: "1Hour", sinceMs: 30 * DAY_MS, maxBars: 800 };
+    case "3M":
+      return { timeframe: "1Day", sinceMs: 90 * DAY_MS, maxBars: 100 };
+    case "6M":
+      return { timeframe: "1Day", sinceMs: 180 * DAY_MS, maxBars: 200 };
+    case "1Y":
+      return { timeframe: "1Day", sinceMs: 365 * DAY_MS, maxBars: 300 };
+    case "5Y":
+      return { timeframe: "1Week", sinceMs: 5 * 365 * DAY_MS, maxBars: 300 };
+    case "MAX":
+      return { timeframe: "1Week", sinceMs: 0, maxBars: 700 };
   }
 }
 
-type AlpacaBarShim = { t: string; o: number; h: number; l: number; c: number; v: number };
+/**
+ * Bars are cached in process for a short window, so switching range or two
+ * students opening the same symbol is not two provider calls. The key carries
+ * the range because the range decides the timeframe.
+ */
+const barCache = new Map<string, { at: number; bars: HistoricalBar[] }>();
+const BAR_CACHE_MAX_ENTRIES = 300;
+
+function barCacheTtl(range: ChartRange): number {
+  return range === "1D" || range === "5D" ? 60_000 : 5 * 60_000;
+}
+
+/**
+ * Real OHLCV bars for one range, straight from the provider. Returns an empty
+ * array when there is no history — the caller falls back to the sampled
+ * `price_history` series rather than inventing candles.
+ */
+export async function getChartBars(
+  symbol: string,
+  range: ChartRange,
+  assetType: AssetType,
+): Promise<HistoricalBar[]> {
+  if (!isAlpacaConfigured()) return [];
+
+  const key = normalizeSymbol(symbol);
+  if (!key) return [];
+
+  const cacheKey = `${key}:${range}`;
+  const hit = barCache.get(cacheKey);
+  if (hit && Date.now() - hit.at < barCacheTtl(range)) return hit.bars;
+
+  const spec = rangeSpec(range, assetType);
+  const start =
+    spec.sinceMs === 0
+      ? new Date(MAX_HISTORY_START_MS)
+      : new Date(Date.now() - spec.sinceMs);
+
+  try {
+    const bars = await fetchAlpacaBars(key, {
+      timeframe: spec.timeframe,
+      start,
+      maxBars: spec.maxBars,
+    });
+    const all = bars.map(toHistoricalBar);
+    const mapped = spec.sessions
+      ? trimToRecentSessions(all, spec.sessions)
+      : all;
+
+    // Successful responses are cached, including a genuinely empty one, so an
+    // unknown symbol cannot hammer the provider either.
+    if (barCache.size >= BAR_CACHE_MAX_ENTRIES) barCache.clear();
+    barCache.set(cacheKey, { at: Date.now(), bars: mapped });
+    return mapped;
+  } catch {
+    // A provider failure is deliberately not cached — the next render should
+    // retry instead of pinning the chart empty for the whole TTL. A previous
+    // good series is better than a blank panel.
+    return hit?.bars ?? [];
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Price history
@@ -252,6 +451,51 @@ async function maybeSampleHistory(
 // ---------------------------------------------------------------------------
 // Quotes
 // ---------------------------------------------------------------------------
+/**
+ * Records at most one price sample per asset per `HISTORY_SAMPLE_SECONDS` for a
+ * whole batch, in three queries rather than two per symbol.
+ *
+ * This is what fills the market page's sparklines and the long-range fallback
+ * series over time. Batching it matters: the per-symbol version would issue
+ * ~50 statements for one screen.
+ */
+async function sampleHistoryBatch(prices: Map<string, number>): Promise<void> {
+  if (prices.size === 0) return;
+
+  const db = createAdminClient();
+  const { data: assets } = await db
+    .from("assets")
+    .select("id, symbol")
+    .in("symbol", Array.from(prices.keys()));
+
+  if (!assets || assets.length === 0) return;
+
+  const idBySymbol = new Map(
+    assets.map((row) => [String(row.symbol), String(row.id)]),
+  );
+  const ids = Array.from(idBySymbol.values());
+
+  const since = new Date(Date.now() - HISTORY_SAMPLE_SECONDS * 1000).toISOString();
+  const { data: recent } = await db
+    .from("price_history")
+    .select("asset_id")
+    .in("asset_id", ids)
+    .gte("captured_at", since)
+    .limit(5000);
+
+  const alreadySampled = new Set((recent ?? []).map((row) => String(row.asset_id)));
+
+  const rows: Array<{ asset_id: string; price: string }> = [];
+  for (const [symbol, price] of prices) {
+    const assetId = idBySymbol.get(symbol);
+    if (!assetId || alreadySampled.has(assetId)) continue;
+    rows.push({ asset_id: assetId, price: price.toString() });
+  }
+
+  if (rows.length === 0) return;
+  await db.from("price_history").insert(rows);
+}
+
 export async function getQuote(
   symbol: string,
   options: { maxAgeSeconds?: number } = {},
@@ -261,7 +505,7 @@ export async function getQuote(
   }
 
   const key = normalizeSymbol(symbol);
-  if (!key) return { ok: false, reason: "No asset specified." };
+  if (!key) return { ok: false, reason: "No investment was chosen." };
 
   const maxAge = options.maxAgeSeconds ?? QUOTE_TTL_SECONDS;
   const cached = await readCachedQuote(key);
@@ -271,36 +515,14 @@ export async function getQuote(
   }
 
   try {
-    // Alpaca first (real bid/ask feed), Finnhub fallback.
+    // Alpaca first (snapshots carry the real previous close and session OHLCV),
+    // Finnhub fallback. When Alpaca answers but does not know the symbol we fall
+    // through to Finnhub before declaring it unknown.
     let fresh: FreshQuote | null = null;
     if (isAlpacaConfigured()) {
-      const alpaca = await fetchAlpacaQuotes([key]);
-      const hit = alpaca.quotes.find((q) => q.symbol === key);
-      if (hit) {
-        // Daily change needs a previous close; Alpaca's latest-quote call does
-        // not carry one, so pull it from the last cached row when present.
-        const prevClose = cached?.previous_close != null ? Number(cached.previous_close) : null;
-        fresh = {
-          symbol: key,
-          price: hit.price,
-          change: prevClose != null ? hit.price - prevClose : null,
-          changePercent:
-            prevClose != null && prevClose > 0
-              ? ((hit.price - prevClose) / prevClose) * 100
-              : null,
-          previousClose: prevClose,
-          dayHigh: null,
-          dayLow: null,
-          dayOpen: null,
-          providerTime: hit.providerTime,
-          bid: hit.bid,
-          ask: hit.ask,
-          volume: hit.volume,
-        };
-      } else if (alpaca.unknown.includes(key)) {
-        // Alpaca answered but does not know this symbol — fall through to
-        // Finnhub before declaring it unknown.
-      }
+      const alpaca = await fetchAlpacaSnapshots([key]);
+      const hit = alpaca.snapshots.find((snapshot) => snapshot.symbol === key);
+      if (hit) fresh = snapshotToFreshQuote(hit);
     }
 
     if (!fresh && isMarketDataConfigured()) {
@@ -312,29 +534,14 @@ export async function getQuote(
       if (cached) return { ok: true, quote: rowToQuote(cached, true) };
       return {
         ok: false,
-        reason: `No market data is available for ${key}. Check the symbol and try again.`,
+        reason: `We couldn't find a price for ${key}. Check the ticker symbol and try again.`,
       };
     }
 
     await cacheQuote(fresh);
     await maybeSampleHistory(key, fresh.price);
 
-    return {
-      ok: true,
-      quote: {
-        symbol: fresh.symbol,
-        price: fresh.price,
-        change: fresh.change,
-        changePercent: fresh.changePercent,
-        previousClose: fresh.previousClose,
-        dayHigh: fresh.dayHigh,
-        dayLow: fresh.dayLow,
-        dayOpen: fresh.dayOpen,
-        providerTime: fresh.providerTime?.toISOString() ?? null,
-        fetchedAt: new Date().toISOString(),
-        stale: false,
-      },
-    };
+    return { ok: true, quote: freshQuoteToQuote(fresh) };
   } catch (error) {
     // Serving a cached price with `stale: true` is honest; inventing one is not.
     if (cached) {
@@ -391,21 +598,212 @@ export async function getQuotes(symbols: string[]): Promise<QuoteMap> {
     return { quotes, failures };
   }
 
-  const results = await mapLimit(unique, 4, async (symbol) => ({
+  // One cache read for the whole batch, so a dashboard does not issue a query
+  // per row.
+  const cachedRows = await readCachedQuotes(unique);
+  const needsFetch: string[] = [];
+
+  for (const symbol of unique) {
+    const row = cachedRows.get(symbol);
+    if (row && ageSeconds(row.fetched_at) < QUOTE_TTL_SECONDS) {
+      quotes.set(symbol, rowToQuote(row, false));
+    } else {
+      needsFetch.push(symbol);
+    }
+  }
+
+  if (needsFetch.length === 0) return { quotes, failures };
+
+  // Alpaca resolves the whole batch in one or two requests. Anything it cannot
+  // price — or a provider failure — falls through to the per-symbol path, which
+  // is where the Finnhub fallback and the stale-cache rules live.
+  if (isAlpacaConfigured()) {
+    try {
+      const { snapshots } = await fetchAlpacaSnapshots(needsFetch);
+      const fresh = snapshots.map(snapshotToFreshQuote);
+      await cacheQuotes(fresh);
+
+      // Sampling is best-effort: a failure to record history must never stop a
+      // price from reaching the screen.
+      await sampleHistoryBatch(
+        new Map(fresh.map((quote) => [quote.symbol, quote.price])),
+      ).catch(() => undefined);
+
+      for (const quote of fresh) {
+        quotes.set(quote.symbol, freshQuoteToQuote(quote));
+      }
+
+      const resolved = new Set(fresh.map((quote) => quote.symbol));
+      await resolveIndividually(
+        needsFetch.filter((symbol) => !resolved.has(symbol)),
+        quotes,
+        failures,
+      );
+      return { quotes, failures };
+    } catch {
+      // The batched call failed as a whole; price the batch one by one.
+    }
+  }
+
+  await resolveIndividually(needsFetch, quotes, failures);
+  return { quotes, failures };
+}
+
+/**
+ * The per-symbol path: forces a fresh read so a symbol that the batched path
+ * could not price is genuinely retried. Never throws.
+ */
+async function resolveIndividually(
+  symbols: string[],
+  quotes: Map<string, Quote>,
+  failures: Map<string, string>,
+): Promise<void> {
+  if (symbols.length === 0) return;
+
+  const results = await mapLimit(symbols, 4, async (symbol) => ({
     symbol,
-    result: await getQuote(symbol),
+    result: await getQuote(symbol, { maxAgeSeconds: 0 }),
   }));
 
   for (const { symbol, result } of results) {
     if (result.ok) quotes.set(symbol, result.quote);
     else failures.set(symbol, result.reason);
   }
-
-  return { quotes, failures };
 }
 
 export async function getQuotesForAssets(assets: Asset[]): Promise<QuoteMap> {
   return getQuotes(assets.map((asset) => asset.symbol));
+}
+
+// ---------------------------------------------------------------------------
+// Market overview (spec §9)
+// ---------------------------------------------------------------------------
+export type MoverQuote = {
+  symbol: string;
+  displaySymbol: string;
+  name: string;
+  price: number;
+  change: number | null;
+  changePercent: number | null;
+  volume: number | null;
+  /** price x session volume — what "most active" is ranked on. */
+  dollarVolume: number | null;
+};
+
+export type MarketMovers = {
+  asOf: string | null;
+  /** Broad-market ETFs, as index proxies. Resolved from the same snapshot. */
+  indexes: MoverQuote[];
+  gainers: MoverQuote[];
+  losers: MoverQuote[];
+  mostActive: MoverQuote[];
+  /** Symbols in the universe the provider could not price this time. */
+  failed: number;
+};
+
+/** Provider names for symbols this classroom already knows about. */
+async function loadAssetNames(symbols: string[]): Promise<Map<string, string>> {
+  const names = new Map<string, string>();
+  if (symbols.length === 0) return names;
+
+  const db = createAdminClient();
+  const { data } = await db.from("assets").select("symbol, name").in("symbol", symbols);
+  for (const row of data ?? []) names.set(row.symbol, row.name);
+  return names;
+}
+
+function toMover(
+  snapshot: AlpacaSnapshot,
+  names: Map<string, string>,
+): MoverQuote {
+  const { previousClose } = snapshot;
+  const change = previousClose !== null ? snapshot.price - previousClose : null;
+  const changePercent =
+    change !== null && previousClose ? (change / previousClose) * 100 : null;
+
+  return {
+    symbol: snapshot.symbol,
+    displaySymbol: snapshot.symbol,
+    // Falls back to the ticker itself rather than to an invented company name.
+    name: names.get(snapshot.symbol) ?? snapshot.symbol,
+    price: snapshot.price,
+    change,
+    changePercent,
+    volume: snapshot.volume,
+    dollarVolume:
+      snapshot.volume !== null ? snapshot.volume * snapshot.price : null,
+  };
+}
+
+/**
+ * The overview board: real top gainers, top losers and most-active names from a
+ * live snapshot of the universe. Sections with nothing to show come back empty
+ * and the UI says so — a movers table is never padded with fabricated rows.
+ */
+export async function getMarketMovers(
+  options: { limit?: number } = {},
+): Promise<MarketMovers> {
+  const limit = options.limit ?? 5;
+  const empty: MarketMovers = {
+    asOf: null,
+    indexes: [],
+    gainers: [],
+    losers: [],
+    mostActive: [],
+    failed: 0,
+  };
+  if (!isAlpacaConfigured()) return empty;
+
+  const universe = [...OVERVIEW_SYMBOLS];
+
+  let snapshots: AlpacaSnapshot[];
+  try {
+    snapshots = (await fetchAlpacaSnapshots(universe)).snapshots;
+  } catch {
+    // An overview panel is not worth failing a whole page for.
+    return empty;
+  }
+
+  if (snapshots.length === 0) return empty;
+
+  // Registered asset names win; the static label is the fund's name, never a
+  // metric.
+  const known = await loadAssetNames(snapshots.map((snapshot) => snapshot.symbol));
+  const names = new Map<string, string>([
+    ...INDEX_ETFS.map((entry) => [entry.symbol, entry.label] as [string, string]),
+    ...known,
+  ]);
+  const rows = snapshots.map((snapshot) => toMover(snapshot, names));
+
+  // Warm the shared quote cache with what the board just fetched, so opening an
+  // asset straight from here does not cost another provider call.
+  await cacheQuotes(snapshots.map(snapshotToFreshQuote)).catch(() => undefined);
+
+  const byChange = rows
+    .filter((row) => row.changePercent !== null)
+    .sort((a, b) => (b.changePercent ?? 0) - (a.changePercent ?? 0));
+
+  const indexOrder = INDEX_ETFS.map((entry) => entry.symbol);
+  const bySymbol = new Map(rows.map((row) => [row.symbol, row]));
+
+  return {
+    asOf: new Date().toISOString(),
+    indexes: indexOrder
+      .map((symbol) => bySymbol.get(symbol))
+      .filter((row): row is MoverQuote => row !== undefined),
+    gainers: byChange
+      .filter((row) => (row.changePercent ?? 0) > 0)
+      .slice(0, limit),
+    losers: byChange
+      .filter((row) => (row.changePercent ?? 0) < 0)
+      .slice(-limit)
+      .reverse(),
+    mostActive: rows
+      .filter((row) => (row.dollarVolume ?? 0) > 0)
+      .sort((a, b) => (b.dollarVolume ?? 0) - (a.dollarVolume ?? 0))
+      .slice(0, limit),
+    failed: universe.length - snapshots.length,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -515,7 +913,7 @@ export async function ensureAsset(
 ): Promise<{ ok: true; assetId: string } | { ok: false; reason: string }> {
   const symbol = normalizeSymbol(rawSymbol);
   if (!symbol || symbol.length > 60) {
-    return { ok: false, reason: "That is not a valid symbol." };
+    return { ok: false, reason: "That doesn't look like a valid ticker symbol." };
   }
 
   const db = createAdminClient();
@@ -552,7 +950,7 @@ export async function ensureAsset(
   if (error || !data) {
     return {
       ok: false,
-      reason: `Could not register ${symbol} as a tradeable asset.`,
+      reason: `This investment couldn't be added to the market list. Please try again.`,
     };
   }
 

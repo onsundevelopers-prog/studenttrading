@@ -24,7 +24,7 @@ type SearchHit = {
  */
 export function AssetSearch({
   classroomId,
-  placeholder = "Search stocks and crypto — AAPL, bitcoin, TSLA",
+  placeholder = "Search by company name or symbol — Apple, AAPL, bitcoin",
   autoFocus = false,
 }: {
   classroomId: string;
@@ -75,7 +75,7 @@ export function AssetSearch({
       } catch {
         if (current !== requestId.current) return;
         setHits([]);
-        setReason("Market data is temporarily unavailable.");
+        setReason("Live market data is temporarily unavailable. Please try again shortly.");
         setState("error");
         setOpen(true);
       }
@@ -170,8 +170,8 @@ export function AssetSearch({
             </p>
           ) : hits.length === 0 ? (
             <p className="px-3 py-3 text-[12px] leading-relaxed text-ink-tertiary">
-              No assets matched “{query.trim()}”. Try a ticker symbol such as
-              AAPL, or a name.
+              Nothing matched “{query.trim()}”. Try a company name such as Apple,
+              or its ticker symbol such as AAPL.
             </p>
           ) : (
             <ul>

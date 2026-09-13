@@ -20,8 +20,8 @@ export default async function StudentLeaderboardPage() {
         <div>
           <h1 className="text-title font-medium text-ink">Class leaderboard</h1>
           <p className="mt-1.5 text-[12px] text-ink-tertiary">
-            Ranked by total portfolio value: cash plus positions at the latest
-            sampled price.
+            Ranked by total portfolio value: available cash plus investments,
+            valued at the latest price.
           </p>
         </div>
         <RefreshMarketButton classroomId={classroom.id} />
@@ -68,7 +68,7 @@ export default async function StudentLeaderboardPage() {
       <Panel>
         <PanelHeader
           title="Standings"
-          description="Every student sees the same numbers — this table is computed from the database, not from your browser."
+          description="Every student sees the same numbers — this table is worked out from the class records, not from your browser."
         />
         <LeaderboardTable rows={rows} highlightStudentId={session.userId} />
       </Panel>

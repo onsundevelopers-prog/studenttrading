@@ -1,6 +1,8 @@
 import Link from "next/link";
 
+import { ChangePill } from "@/components/data/atoms";
 import { MarketList, type MarketRow } from "@/components/data/market-list";
+import { MoverTable } from "@/components/data/mover-table";
 import { AssetSearch } from "@/components/market/asset-search";
 import { Button } from "@/components/ui/button";
 import {
@@ -19,11 +21,36 @@ import {
   loadTradeableAssets,
 } from "@/lib/data/queries";
 import {
+  getMarketMovers,
   getQuotes,
   isMarketDataConfigured,
   MARKET_UNCONFIGURED_MESSAGE,
+  type MoverQuote,
 } from "@/lib/market/service";
+import { getEquityMarketStatus } from "@/lib/market/market-status";
+import { formatDateTime, formatPrice } from "@/lib/format";
 import { cn } from "@/lib/utils";
+
+/** One broad-market ETF, as an index proxy rather than the index itself. */
+function IndexTile({ row }: { row: MoverQuote }) {
+  return (
+    <Link
+      href={`/student/market/${encodeURIComponent(row.symbol)}`}
+      className="rounded-md border border-hairline bg-surface-2 px-3 py-2.5 outline-none transition-colors hover:border-hairline-strong focus-visible:ring-2 focus-visible:ring-ring"
+    >
+      <div className="flex items-baseline justify-between gap-2">
+        <span className="font-mono text-[12px] font-medium text-ink">
+          {row.displaySymbol}
+        </span>
+        <ChangePill change={row.change} percent={row.changePercent} />
+      </div>
+      <p className="mt-1.5 truncate text-[11px] text-ink-tertiary">{row.name}</p>
+      <p className="num mt-1 text-[16px] font-medium text-ink">
+        {formatPrice(row.price, "stock")}
+      </p>
+    </Link>
+  );
+}
 
 const PAGE_SIZE = 24;
 
@@ -63,11 +90,22 @@ export default async function StudentMarketPage({
   );
 
   const configured = isMarketDataConfigured();
-  const { quotes, failures } = configured
-    ? await getQuotes(visible.map((asset) => asset.symbol))
-    : { quotes: new Map(), failures: new Map<string, string>() };
 
-  const history = await loadPriceHistoryForAssets(visible.map((asset) => asset.id), 48);
+  // The overview board, the index strip and the market clock are independent of
+  // the browser below, so they resolve together. The whole board costs one
+  // batched snapshot call because the index ETFs are part of the universe.
+  const [quotesResult, movers, marketStatus, history] = await Promise.all([
+    configured
+      ? getQuotes(visible.map((asset) => asset.symbol))
+      : Promise.resolve({
+          quotes: new Map<string, never>(),
+          failures: new Map<string, string>(),
+        }),
+    configured ? getMarketMovers({ limit: 5 }) : Promise.resolve(null),
+    configured ? getEquityMarketStatus() : Promise.resolve(null),
+    loadPriceHistoryForAssets(visible.map((asset) => asset.id), 48),
+  ]);
+  const { quotes, failures } = quotesResult;
 
   // Null means "no allow-list", which is different from an empty allow-list.
   const permitted =
@@ -98,8 +136,8 @@ export default async function StudentMarketPage({
       <header>
         <h1 className="text-title font-medium text-ink">Market</h1>
         <p className="mt-1.5 text-[12px] text-ink-tertiary">
-          Live prices for US stocks, ETFs and major crypto pairs. Every price here
-          is fetched from the provider — nothing is simulated or estimated.
+          Live prices for US stocks, ETFs and major crypto pairs, fetched from our
+          market data source. Nothing on this page is invented or estimated.
         </p>
       </header>
 
@@ -107,12 +145,88 @@ export default async function StudentMarketPage({
         <AssetSearch classroomId={classroom.id} />
       </Panel>
 
+      {movers ? (
+        <div className="space-y-5">
+          <Panel>
+            <PanelHeader
+              title="Market overview"
+              description={
+                movers.asOf
+                  ? `Prices checked at ${formatDateTime(movers.asOf)}${
+                      movers.failed > 0
+                        ? ` · ${movers.failed} of the companies checked could not be priced`
+                        : ""
+                    }`
+                  : undefined
+              }
+              action={
+                marketStatus ? (
+                  <Badge
+                    tone={
+                      marketStatus.session === "regular"
+                        ? "pos"
+                        : marketStatus.session === "closed"
+                          ? "neg"
+                          : "warn"
+                    }
+                  >
+                    {marketStatus.label}
+                  </Badge>
+                ) : null
+              }
+            />
+            <PanelBody>
+              {movers.indexes.length > 0 ? (
+                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                  {movers.indexes.map((row) => (
+                    <IndexTile key={row.symbol} row={row} />
+                  ))}
+                </div>
+              ) : (
+                <Notice tone="neutral">
+                  The market index funds could not be priced right now, so none
+                  are shown. Nothing made-up is displayed in their place.
+                </Notice>
+              )}
+            </PanelBody>
+          </Panel>
+
+          <div className="grid gap-5 xl:grid-cols-3">
+            <MoverTable
+              title="Biggest Gains Today"
+              description="The largest price rises among the companies we checked today."
+              rows={movers.gainers}
+              metric="dayRange"
+              assetHrefPrefix="/student/market"
+              emptyDescription="No company we checked is up in price today."
+            />
+            <MoverTable
+              title="Biggest Losses Today"
+              description="The largest price falls among the companies we checked today."
+              rows={movers.losers}
+              metric="dayRange"
+              assetHrefPrefix="/student/market"
+              emptyDescription="No company we checked is down in price today."
+            />
+            <MoverTable
+              title="Most Traded Today"
+              description="Ranked by the total value of shares traded today."
+              rows={movers.mostActive}
+              metric="turnover"
+              assetHrefPrefix="/student/market"
+              emptyDescription="No trading volume was reported for the companies we checked today."
+            />
+          </div>
+        </div>
+      ) : null}
+
       {!configured ? (
         <Notice tone="neg">{MARKET_UNCONFIGURED_MESSAGE}</Notice>
       ) : failureCount > 0 ? (
         <Notice tone="warn">
-          {failureCount} of {visible.length} assets could not be priced right now.
-          They are listed below without a price rather than with a made-up one.
+          {failureCount} of {visible.length} investments could not be priced right
+          now. They are listed below without a price, rather than with a made-up
+          one.
         </Notice>
       ) : null}
 
@@ -126,8 +240,8 @@ export default async function StudentMarketPage({
           }
           description={
             history.size > 0
-              ? "Sparklines are drawn from prices this simulator has sampled over the last 48 hours."
-              : "Sparklines will appear as prices are sampled over time."
+              ? "The mini charts are drawn from prices this simulator has recorded over the last 48 hours."
+              : "Mini charts will appear as prices are recorded over time."
           }
           action={
             <div className="flex items-center gap-1.5">
@@ -152,8 +266,8 @@ export default async function StudentMarketPage({
         <MarketList
           rows={rows}
           assetHrefPrefix="/student/market"
-          emptyTitle="No assets available."
-          emptyDescription="If you expected assets here, the asset universe has not been seeded — run the migration in supabase/migrations."
+          emptyTitle="No investments are available here yet."
+          emptyDescription="Nothing has been added to this classroom's market list. Ask your teacher to check the classroom settings."
         />
 
         {totalPages > 1 ? (
@@ -191,8 +305,8 @@ export default async function StudentMarketPage({
         <Panel>
           <PanelBody>
             <EmptyState
-              title="No assets to show."
-              description="Try a different filter."
+              title="Nothing to show here."
+              description="Try a different filter, or use the search box above to look up a company by name or ticker symbol."
             />
           </PanelBody>
         </Panel>

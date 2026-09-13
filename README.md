@@ -28,16 +28,25 @@ Copy `.env.example` to `.env.local` and fill in the values:
 | `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Supabase → Project Settings → API keys  |
 | `SUPABASE_SECRET_KEY`                | Supabase → Project Settings → API keys (secret) |
 | `FINNHUB_API_KEY`                    | https://finnhub.io/register (free tier)   |
+| `ALPACA_API_KEY` / `ALPACA_SECRET_KEY` | https://alpaca.markets (free market data plan) |
+| `ALPHA_VANTAGE_API_KEY`              | https://www.alphavantage.co/support/#api-key (free) |
 | `CRON_SECRET`                        | Generate one — see the comment in `.env.example` |
 | `STUDENT_EMAIL_DOMAIN`               | Any domain; students never receive email  |
 
 The two `NEXT_PUBLIC_` values are the only ones that reach the browser.
-`SUPABASE_SECRET_KEY` and `FINNHUB_API_KEY` are read exclusively by server
-modules — anything secret must never be prefixed with `NEXT_PUBLIC_`.
+`SUPABASE_SECRET_KEY`, `FINNHUB_API_KEY`, `ALPACA_SECRET_KEY` and
+`ALPHA_VANTAGE_API_KEY` are read exclusively by server modules — anything secret
+must never be prefixed with `NEXT_PUBLIC_`.
+
+Optional:
+
+| Variable                        | Purpose                                              |
+| ------------------------------- | ---------------------------------------------------- |
+| `ALPHA_VANTAGE_DAILY_BUDGET`    | Ceiling on news calls per UTC day. Defaults to `20` (the free tier allows 25 **in total**, shared by every classroom). Set it to `0` to stop all news requests and serve only cache. Raise it on a paid news plan. |
 
 ### 3. Create the database schema
 
-**This step is required before the app will run.** The schema creates 17 tables,
+**This step is required before the app will run.** The schema creates 22 tables,
 row level security policies and the trading engine.
 
 1. Open your Supabase project → **SQL Editor** → **New query**.
@@ -46,6 +55,12 @@ row level security policies and the trading engine.
 4. Then paste `supabase/migrations/0002_fix_class_overview.sql` and run it. That
    file is already folded into `0001`, so this is only needed if you applied an
    earlier copy of `0001` — `npm run check:db` tells you which case you are in.
+5. Then paste `supabase/migrations/0006_news.sql` and run it. It adds the news
+   cache and the shared Alpha Vantage call counter. Every migration in the
+   folder is written to be safe to re-run, so applying the whole set in order is
+   harmless. **News still works without `0006`** — it falls back to an
+   in-process cache — but the cache stops being shared between server instances
+   and the daily news budget stops being enforced across them.
 
 Then verify:
 
@@ -103,6 +118,13 @@ an asset, and buy or sell from the order ticket. Portfolio value, cost basis,
 realised and unrealised P/L, holdings, trade history and the class leaderboard
 are all computed from the database.
 
+**News** (sidebar → News) has topical tabs — For you, Market, Stocks, Crypto,
+Technology, Energy, Financials — with sorting by Latest, Most relevant, Most
+positive or Most negative. “For you” queries the assets you actually hold or
+watch. Each asset page has a **News** tab (that ticker's coverage plus its
+sentiment distribution) and a **Fundamentals** tab (profile, market cap,
+multiples, 52-week range and description).
+
 ---
 
 ## Architecture
@@ -129,7 +151,8 @@ src/
     actions/            server actions (all mutations)
     auth/               session, role guards, workspace context
     data/               read-only loaders
-    market/             Finnhub client + the only market data service
+    market/             Alpaca + Finnhub clients and the market data service
+    news/               Alpha Vantage client and the news service
     supabase/           admin, server, browser and proxy clients
     types.ts            domain types + mappers from RPC payloads
     validation.ts       Zod schemas for every input boundary
@@ -209,14 +232,71 @@ deploy the cron in `vercel.json` (every five minutes at
 
 ---
 
+## Financial news
+
+Alpha Vantage supplies news, sentiment and company fundamentals. Everything goes
+through `src/lib/news/service.ts`; no component calls the provider directly.
+
+**Why the news layer is mostly a cache.** A free Alpha Vantage key allows one
+request per second and **25 requests per day in total** — shared by every student
+in every classroom. That is not enough to call per page view, so the service:
+
+1. serves from an in-process cache while a response is fresh;
+2. otherwise reads `news_cache` (`0006_news.sql`), so a cold serverless instance
+   does not spend a request another instance already spent;
+3. collapses concurrent identical requests onto a single upstream call;
+4. reserves a call atomically through `consume_api_quota()` against
+   `ALPHA_VANTAGE_DAILY_BUDGET`.
+
+Freshness windows are 15 minutes for news and 24 hours for fundamentals. Once
+the allowance is spent, cached coverage is still served and **flagged as stale**;
+only a completely empty cache produces “News temporarily unavailable.” Nothing
+is ever generated to fill a gap.
+
+**There is no news cron, deliberately.** Refreshing every 15 minutes around the
+clock would need ~96 calls a day against a 25-call allowance. News refreshes on
+demand instead, at most once per window.
+
+**Ticker news is filtered, not just requested.** Alpha Vantage's `tickers`
+parameter is a *relevance* filter: asking for `AAPL` also returns articles that
+merely mention Apple. The service therefore keeps only articles the provider
+tagged with that ticker above a relevance floor, which is what makes
+“no unrelated news” true rather than aspirational.
+
+**Sentiment is counted, not modelled.** The distribution is a tally of the
+provider's own per-article labels, labelled with the number of articles it was
+counted from. Sorting by “Most relevant” uses the provider's relevance score for
+the focused ticker; with no single ticker in focus it preserves the provider's
+own relevance ordering rather than inventing one.
+
+**Sentiment never reaches the trading engine.** It is informational only; no
+code path exists that could act on it.
+
+### News troubleshooting
+
+| Symptom                        | Meaning                                                     |
+| ------------------------------ | ----------------------------------------------------------- |
+| “News temporarily unavailable.” | Provider unreachable, rate-limited, or the daily allowance is spent (`0006` not applied means the counter is per-instance). |
+| A tab shows no articles         | The provider genuinely returned none for that topic. Nothing is substituted. |
+| Sentiment panel shows 0 articles | Same as above — there is no sentiment to tally.            |
+
+Run `npx tsx scripts/news-probe.mts` to exercise the whole layer against the live
+provider. It spends three or four of the day's requests, so use it sparingly.
+
+---
+
 ## Tests
 
 ```bash
-npm run test:db      # 106 assertions against a real PostgreSQL (PGlite)
+npm run test:db      # assertions against a real PostgreSQL (PGlite)
 npm run test:e2e     # the full flow against your live Supabase project
 npm run smoke        # every authenticated page renders (needs a running server)
 npm run typecheck
 npm run build
+
+# live provider probes (spend real API requests)
+npx tsx scripts/alpaca-probe.mts   # quotes, snapshots, intraday bars, market clock
+npx tsx scripts/news-probe.mts     # news, sentiment, sorting, cache, budget guard
 ```
 
 `npm run test:db` runs the **real migration** against a real PostgreSQL (PGlite
@@ -351,8 +431,19 @@ Node version: CI pins 24, matching local development. Change both together.
   Authorisation is derived from `classrooms.teacher_id` and
   `class_members.student_id`, never from a role flag, so self-signing-up as a
   teacher cannot expose anybody else's data.
-- **No short selling, options, margin or limit orders.** The engine executes
-  immediate market buys and sells only. These are not stubbed or faked — they
-  simply do not exist in this MVP.
+- **No short selling, options or margin.** The engine executes buys and sells of
+  owned shares only. These are not stubbed or faked — they simply do not exist
+  in this MVP.
+- **Order types are market, limit, stop and stop-limit**, subject to what the
+  teacher enables per classroom. Resting orders are parked as `pending` and
+  filled by `/api/cron/match-orders` against live prices; a market order fills
+  immediately against the same cached quote the database validates against.
+- **No commissions.** The schema has no commission setting and the engine charges
+  none, so the order ticket shows no commission line rather than a fake `$0.00`.
+- **Index values are ETF proxies** (SPY/QQQ/DIA/IWM). Alpaca serves no index feed,
+  so they are labelled as index ETFs rather than as the index itself.
+- **News and fundamentals are rate-limited by the news plan, not by this app.**
+  On a free Alpha Vantage key, a class can exhaust the day's 25 requests; the app
+  then serves cached coverage, flagged, until the allowance resets.
 - **Price history starts empty.** That is a consequence of the provider's free
   tier, not a placeholder.

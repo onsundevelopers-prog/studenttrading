@@ -1,9 +1,10 @@
 import Link from "next/link";
 
+import { AllocationBar } from "@/components/data/allocation-bar";
 import { HoldingsTable } from "@/components/data/holdings-table";
 import { PortfolioSummary } from "@/components/data/portfolio-summary";
 import { Button } from "@/components/ui/button";
-import { Notice, Panel, PanelHeader } from "@/components/ui/primitives";
+import { Notice, Panel, PanelBody, PanelHeader } from "@/components/ui/primitives";
 import { refreshStudentMarketAction } from "@/lib/actions/market";
 import { getStudentWorkspace } from "@/lib/auth/context";
 import {
@@ -28,11 +29,11 @@ export default async function StudentHoldingsPage() {
     <div className="space-y-5">
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-title font-medium text-ink">Holdings</h1>
+          <h1 className="text-title font-medium text-ink">Your Investments</h1>
           <p className="mt-1.5 text-[12px] text-ink-tertiary">
-            {portfolio.holdings.length} position
+            {portfolio.holdings.length} investment
             {portfolio.holdings.length === 1 ? "" : "s"} · valued at the latest
-            sampled market price
+            recorded price
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -54,8 +55,21 @@ export default async function StudentHoldingsPage() {
 
       <Panel>
         <PanelHeader
-          title="Positions"
-          description="Cost basis is the weighted average of everything you bought, after sells."
+          title="How Your Money Is Split"
+          description="Each investment's share of your portfolio by market value, with your available cash included."
+        />
+        <PanelBody>
+          <AllocationBar
+            holdings={portfolio.holdings}
+            cashBalance={portfolio.cashBalance}
+          />
+        </PanelBody>
+      </Panel>
+
+      <Panel>
+        <PanelHeader
+          title="Your Investments"
+          description="Sort any column or filter by name. Average Price is what you paid on average for everything you own, allowing for anything you have already sold."
         />
         <HoldingsTable
           holdings={portfolio.holdings}
@@ -65,8 +79,9 @@ export default async function StudentHoldingsPage() {
 
       {portfolio.pricesIncomplete ? (
         <Notice tone="warn">
-          One or more positions have no sampled price yet, so their cost basis is
-          shown instead of a market value. Use “Refresh prices” above.
+          One or more of your investments don&apos;t have a current price yet, so
+          the price you paid is shown instead of its market value. Use
+          &ldquo;Refresh prices&rdquo; above.
         </Notice>
       ) : null}
     </div>

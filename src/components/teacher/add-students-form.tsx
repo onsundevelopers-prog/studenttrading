@@ -47,7 +47,7 @@ export function AddStudentsForm({
     <Panel>
       <PanelHeader
         title="Add students"
-        description="One student per line: Name, or Name, handle, or Name, handle, student ID. Tabs work too."
+        description="One student per line: Name, or Name, username, or Name, username, student ID. You can use tabs instead of commas."
       />
       <div className="space-y-4 p-4">
         <form ref={formRef} action={formAction} className="space-y-3">
@@ -56,7 +56,7 @@ export function AddStudentsForm({
           <FieldGroup
             label="Class roster"
             htmlFor="roster"
-            hint="Handles are generated from names if you leave them out. Duplicate handles are skipped."
+            hint="A username is created from the name if you leave it out. Students with the same username are skipped."
           >
             <Textarea
               id="roster"
@@ -70,7 +70,7 @@ export function AddStudentsForm({
           </FieldGroup>
 
           <FieldGroup
-            label="Starting capital for these students"
+            label="Money these students start with"
             htmlFor="startingCapital"
             hint={`Class default is $${defaultStartingCapital.toLocaleString("en-US")}.`}
           >
@@ -124,9 +124,9 @@ export function AddStudentsForm({
           </div>
         ) : (
           <Notice>
-            Each new student signs in with the handle you assign and the password
-            shown here. Student IDs are used for display only — they are never
-            sufficient on their own to sign in.
+            Each new student signs in with the username you assign and the
+            password shown here. Student IDs are for display only — they are never
+            enough on their own to sign in.
           </Notice>
         )}
       </div>

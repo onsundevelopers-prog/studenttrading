@@ -20,12 +20,12 @@ export const handleSchema = z
 export const quantitySchema = z
   .string()
   .trim()
-  .min(1, "Enter a quantity.")
+  .min(1, "Enter how much you want to trade.")
   .regex(
     /^\d{1,12}(\.\d{1,8})?$/,
     "Enter a number with up to 8 decimal places.",
   )
-  .refine((value) => Number(value) > 0, "Quantity must be greater than zero.");
+  .refine((value) => Number(value) > 0, "Enter an amount greater than zero.");
 
 export const credentialsSchema = z.object({
   identifier: z.string().trim().min(2, "Enter your email or student handle."),
@@ -96,7 +96,7 @@ export const addStudentSchema = z.object({
 });
 
 export const bulkAddStudentsSchema = z.object({
-  classroomId: z.uuid("Invalid classroom."),
+  classroomId: z.uuid("That classroom couldn't be found."),
   students: z
     .array(addStudentSchema)
     .min(1, "Add at least one student.")
@@ -104,23 +104,28 @@ export const bulkAddStudentsSchema = z.object({
 });
 
 export const tradeSchema = z.object({
-  classroomId: z.uuid("Invalid classroom."),
-  symbol: z.string().trim().min(1, "Choose an asset.").max(60),
-  side: z.enum(["buy", "sell"], { error: "Order side must be buy or sell." }),
+  classroomId: z.uuid("That classroom couldn't be found."),
+  symbol: z.string().trim().min(1, "Choose an investment.").max(60),
+  side: z.enum(["buy", "sell"], {
+    error: "Choose whether you want to buy or sell.",
+  }),
   quantity: quantitySchema,
   /** Client-generated, so a double-click cannot place two identical orders. */
-  idempotencyKey: z.uuid("Invalid request."),
+  idempotencyKey: z.uuid("That request couldn't be read. Please try again."),
 });
 
 export const classSettingsSchema = z.object({
-  classroomId: z.uuid("Invalid classroom."),
+  classroomId: z.uuid("That classroom couldn't be found."),
   tradingEnabled: z.coerce.boolean(),
   pausedReason: z.string().trim().max(200).optional().default(""),
   tradingOpensAt: z.string().trim().optional().default(""),
   tradingClosesAt: z.string().trim().optional().default(""),
   assetPolicy: z.enum(["all", "allowlist"]),
   maxTradeValue: z
-    .union([z.literal(""), z.coerce.number().positive("Must be greater than zero.")])
+    .union([
+      z.literal(""),
+      z.coerce.number().positive("The order limit must be greater than zero."),
+    ])
     .optional()
     .default(""),
   maxPositionPercent: z
@@ -128,8 +133,8 @@ export const classSettingsSchema = z.object({
       z.literal(""),
       z.coerce
         .number()
-        .gt(0, "Must be greater than zero.")
-        .lte(100, "Cannot exceed 100%."),
+        .gt(0, "The limit must be greater than zero.")
+        .lte(100, "The limit cannot be more than 100% of a portfolio."),
     ])
     .optional()
     .default(""),
@@ -148,33 +153,33 @@ export const classSettingsSchema = z.object({
 });
 
 export const classPermissionsSchema = z.object({
-  classroomId: z.uuid("Invalid classroom."),
+  classroomId: z.uuid("That classroom couldn't be found."),
   assetIds: z.array(z.uuid()).max(500).default([]),
 });
 
 export const adjustCashSchema = z.object({
-  classroomId: z.uuid("Invalid classroom."),
-  studentId: z.uuid("Invalid student."),
+  classroomId: z.uuid("That classroom couldn't be found."),
+  studentId: z.uuid("That student couldn't be found."),
   delta: z.coerce
     .number()
-    .refine((value) => value !== 0, "Enter a non-zero amount.")
+    .refine((value) => value !== 0, "Enter an amount other than zero.")
     .refine((value) => Math.abs(value) <= 10_000_000, "That amount is too large."),
   reason: z.string().trim().max(200).optional().default(""),
 });
 
 export const resetStudentSchema = z.object({
-  classroomId: z.uuid("Invalid classroom."),
-  studentId: z.uuid("Invalid student."),
+  classroomId: z.uuid("That classroom couldn't be found."),
+  studentId: z.uuid("That student couldn't be found."),
   startingCapital: z.coerce.number().min(0).max(100_000_000).optional(),
 });
 
 export const resetClassroomSchema = z.object({
-  classroomId: z.uuid("Invalid classroom."),
+  classroomId: z.uuid("That classroom couldn't be found."),
   startingCapital: z.coerce.number().min(0).max(100_000_000).optional(),
 });
 
 export const competitionSchema = z.object({
-  classroomId: z.uuid("Invalid classroom."),
+  classroomId: z.uuid("That classroom couldn't be found."),
   name: z.string().trim().min(2, "Name the competition.").max(80),
   description: z.string().trim().max(400).optional().default(""),
   startsAt: z.string().trim().min(1, "Choose a start time."),
@@ -182,7 +187,7 @@ export const competitionSchema = z.object({
 });
 
 export const watchlistSchema = z.object({
-  classroomId: z.uuid("Invalid classroom."),
+  classroomId: z.uuid("That classroom couldn't be found."),
   symbol: z.string().trim().min(1).max(60),
 });
 
@@ -192,7 +197,7 @@ export const watchlistSchema = z.object({
  * settings — never an assumed limit.
  */
 export const requestFundsSchema = z.object({
-  classroomId: z.uuid("Invalid classroom."),
+  classroomId: z.uuid("That classroom couldn't be found."),
   amount: z
     .string()
     .trim()
@@ -201,7 +206,7 @@ export const requestFundsSchema = z.object({
 });
 
 export const decideFundRequestSchema = z.object({
-  requestId: z.uuid("Invalid request."),
+  requestId: z.uuid("That request couldn't be found."),
   decision: z.enum(["approved", "denied"]),
 });
 
@@ -214,8 +219,8 @@ const orderPriceSchema = z
 /** Extended order intake: market, limit, stop, stop-limit (spec §4). */
 export const placeOrderSchema = z
   .object({
-    classroomId: z.uuid("Invalid classroom."),
-    symbol: z.string().trim().min(1, "Pick an asset.").max(60),
+    classroomId: z.uuid("That classroom couldn't be found."),
+    symbol: z.string().trim().min(1, "Choose an investment.").max(60),
     side: z.enum(["buy", "sell"]),
     orderType: z.enum(["market", "limit", "stop", "stop_limit"]),
     quantity: quantitySchema,
@@ -226,17 +231,17 @@ export const placeOrderSchema = z
   .refine(
     (data) => !(data.orderType === "limit" || data.orderType === "stop_limit") ||
       Boolean(data.limitPrice),
-    { message: "A limit price is required for this order type.", path: ["limitPrice"] },
+    { message: "Enter a limit price for this order.", path: ["limitPrice"] },
   )
   .refine(
     (data) => !(data.orderType === "stop" || data.orderType === "stop_limit") ||
       Boolean(data.stopPrice),
-    { message: "A stop price is required for this order type.", path: ["stopPrice"] },
+    { message: "Enter a stop price for this order.", path: ["stopPrice"] },
   );
 
 export const removeWatchlistItemSchema = z.object({
-  classroomId: z.uuid("Invalid classroom."),
-  itemId: z.uuid("Invalid item."),
+  classroomId: z.uuid("That classroom couldn't be found."),
+  itemId: z.uuid("That watchlist item couldn't be found."),
 });
 
 export const searchSchema = z
@@ -246,7 +251,7 @@ export const searchSchema = z
   .max(60, "That search is too long.");
 
 export const selectClassroomSchema = z.object({
-  classroomId: z.uuid("Invalid classroom."),
+  classroomId: z.uuid("That classroom couldn't be found."),
   next: z.string().trim().max(300).optional().default(""),
 });
 

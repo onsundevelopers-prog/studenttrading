@@ -12,7 +12,7 @@ export default function NotFound() {
           That page does not exist.
         </h1>
         <p className="mt-2 text-[13px] leading-relaxed text-ink-subtle">
-          If you followed a link to a student or an asset, it may have been
+          If you followed a link to a student or an investment, it may have been
           removed, or it may belong to a different classroom.
         </p>
         <div className="mt-5 flex gap-2">

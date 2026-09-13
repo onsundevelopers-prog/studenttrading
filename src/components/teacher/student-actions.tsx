@@ -65,7 +65,7 @@ export function StudentActions({
           <DropdownMenuSeparator />
           <DropdownMenuItem onSelect={() => setOpenDialog("cash")}>
             <Wallet className="size-3.5" />
-            Adjust cash
+            Adjust available cash
           </DropdownMenuItem>
           <DropdownMenuItem onSelect={() => setOpenDialog("password")}>
             <KeyRound className="size-3.5" />
@@ -171,8 +171,8 @@ function AdjustCashDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader
-          title={`Adjust ${studentName}'s balance`}
-          description="Use a negative amount to take virtual money away. The adjustment also moves the student's starting capital, so it never shows up as trading performance."
+          title={`Adjust ${studentName}'s available cash`}
+          description="Use a negative amount to take virtual money away. The adjustment also moves the money this student started with, so it never counts as trading profit or loss."
         />
         <form action={formAction} className="space-y-3">
           <input type="hidden" name="classroomId" value={classroomId} />
@@ -238,7 +238,7 @@ function ResetPortfolioDialog({
       <DialogContent>
         <DialogHeader
           title={`Reset ${studentName}'s portfolio`}
-          description="This clears every position and the full trade history for this student in this classroom. It cannot be undone."
+          description="This clears every investment and the full trade history for this student in this classroom. It cannot be undone."
         />
         <form action={formAction} className="space-y-3">
           <input type="hidden" name="classroomId" value={classroomId} />
@@ -294,7 +294,7 @@ function PasswordDialog({
       <DialogContent className="max-w-xl">
         <DialogHeader
           title={`New password for ${studentName}`}
-          description="The old password stops working immediately. The student keeps their portfolio and trade history."
+          description="The old password stops working straight away. The student keeps their investments and trade history."
         />
 
         {credentials.length > 0 ? (

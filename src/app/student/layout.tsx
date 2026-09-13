@@ -26,7 +26,7 @@ export default async function StudentLayout({
         <Panel className="w-full p-6">
           <EmptyState
             title="You are not enrolled in a classroom yet."
-            description="Ask your teacher for your handle and password, or for the class code, and they will add you to the simulation."
+            description="Ask your teacher for your username and password, or for the class code, and they will add you to the simulation."
           />
           <form action={signOutAction} className="mt-5 flex justify-center">
             <Button type="submit" variant="secondary" size="md">

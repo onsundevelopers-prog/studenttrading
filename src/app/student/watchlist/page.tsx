@@ -19,23 +19,23 @@ export default async function StudentWatchlistPage() {
       <header>
         <h1 className="text-title font-medium text-ink">Watchlist</h1>
         <p className="mt-1.5 text-[12px] text-ink-tertiary">
-          Assets you are tracking. Adding something here never buys it.
+          Companies you are following. Adding one here never buys it.
         </p>
       </header>
 
       <Panel className="p-4">
         <AssetSearch
           classroomId={classroom.id}
-          placeholder="Search for an asset to add"
+          placeholder="Search for a company to add"
         />
       </Panel>
 
       <Panel>
         <PanelHeader
-          title="Tracked assets"
+          title="Companies You Follow"
           description={
             failures.size > 0
-              ? `${failures.size} asset${failures.size === 1 ? "" : "s"} could not be priced right now.`
+              ? `${failures.size} investment${failures.size === 1 ? "" : "s"} could not be priced right now.`
               : undefined
           }
         />

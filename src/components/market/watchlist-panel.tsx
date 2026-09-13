@@ -38,8 +38,8 @@ export function WatchlistPanel({
     return (
       <EmptyState
         icon={<Bookmark className="size-5" />}
-        title="Add assets to your watchlist to track them."
-        description="Open any asset from the market and use “Add to watchlist” to keep an eye on its price without buying it."
+        title="Your watchlist is empty."
+        description="Open any company from the market and choose “Add to watchlist” to follow its price without buying it."
         action={
           <Link
             href="/student/market"
@@ -94,7 +94,7 @@ export function WatchlistPanel({
                     —
                   </span>
                   <span className="mt-1 block text-[11px] text-ink-tertiary">
-                    unavailable
+                    no price
                   </span>
                 </>
               )}
@@ -130,7 +130,7 @@ export function WatchlistCard(props: {
     <Panel>
       <PanelHeader
         title="Watchlist"
-        description="Assets you are tracking but do not own."
+        description="Companies you are following but don't own. Adding one here never buys it."
         action={
           <Link
             href="/student/watchlist"

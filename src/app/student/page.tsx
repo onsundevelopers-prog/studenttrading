@@ -115,7 +115,7 @@ export default async function StudentDashboardPage() {
               <form action={refreshStudentMarketAction}>
                 <input type="hidden" name="classroomId" value={classroom.id} />
                 <Button type="submit" size="sm" variant="secondary">
-                  Record snapshot
+                  Record Value
                 </Button>
               </form>
             }
@@ -123,8 +123,8 @@ export default async function StudentDashboardPage() {
 
           <Panel>
             <PanelHeader
-              title="Holdings"
-              description="What you own right now, valued at the latest sampled price."
+              title="Your Investments"
+              description="What you own right now, valued at the latest recorded price."
               action={
                 <Button asChild size="sm" variant="ghost">
                   <Link href="/student/holdings">
@@ -142,7 +142,7 @@ export default async function StudentDashboardPage() {
 
           <Panel>
             <PanelHeader
-              title="Recent trades"
+              title="Recent Trades"
               action={
                 <Button asChild size="sm" variant="ghost">
                   <Link href="/student/activity">
@@ -158,11 +158,13 @@ export default async function StudentDashboardPage() {
 
         <div className="space-y-5">
           <Panel className="p-4">
-            <h2 className="mb-3 text-[13px] font-medium text-ink">Find an asset</h2>
+            <h2 className="mb-3 text-[13px] font-medium text-ink">
+              Find something to buy
+            </h2>
             <AssetSearch classroomId={classroom.id} />
             <p className="mt-3 text-[12px] leading-relaxed text-ink-tertiary">
-              Search US stocks and major crypto pairs. Prices are fetched live from
-              the market data provider.
+              Search US stocks and major crypto pairs. Prices come straight from
+              our live market data source.
             </p>
           </Panel>
 

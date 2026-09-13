@@ -82,8 +82,8 @@ async function request<T>(
     const aborted = error instanceof Error && error.name === "TimeoutError";
     throw new MarketDataError(
       aborted
-        ? "The market data provider timed out."
-        : "Could not reach the market data provider.",
+        ? "Our market data source timed out."
+        : "We couldn't reach our market data source.",
     );
   }
 
@@ -104,7 +104,9 @@ async function request<T>(
   try {
     return (await response.json()) as T;
   } catch {
-    throw new MarketDataError("The market data provider returned malformed data.");
+    throw new MarketDataError(
+      "Our market data source returned something we couldn't read.",
+    );
   }
 }
 

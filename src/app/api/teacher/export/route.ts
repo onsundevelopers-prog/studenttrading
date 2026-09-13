@@ -53,11 +53,11 @@ export async function GET(request: Request) {
       "Handle",
       "Student ID",
       "Portfolio value",
-      "Cash",
-      "Positions value",
-      "P/L",
+      "Available cash",
+      "Investments value",
+      "Profit and loss",
       "Return %",
-      "Trades",
+      "Trades placed",
       "Last activity",
     ]
       .map(escape)
@@ -86,7 +86,17 @@ export async function GET(request: Request) {
   lines.push("");
   lines.push("Trades");
   lines.push(
-    ["Time", "Student", "Side", "Symbol", "Name", "Quantity", "Price", "Value", "Realised P/L"]
+    [
+      "Time",
+      "Student",
+      "Buy or sell",
+      "Symbol",
+      "Name",
+      "Shares",
+      "Price each",
+      "Total value",
+      "Profit/loss from sold investments",
+    ]
       .map(escape)
       .join(","),
   );

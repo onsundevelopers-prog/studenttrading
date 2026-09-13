@@ -17,7 +17,7 @@ export function formatMoney(value: number | null | undefined): string {
   return usd.format(value);
 }
 
-/** Always carries an explicit sign, for P/L figures. */
+/** Always carries an explicit sign, for profit and loss figures. */
 export function formatSignedMoney(value: number | null | undefined): string {
   if (value === null || value === undefined || Number.isNaN(value)) return "—";
   const sign = value > 0 ? "+" : value < 0 ? "−" : "";
@@ -76,6 +76,19 @@ export function formatCompactMoney(value: number | null | undefined): string {
   if (abs >= 1_000_000) return `$${(value / 1_000_000).toFixed(2)}M`;
   if (abs >= 10_000) return `$${(value / 1_000).toFixed(1)}K`;
   return formatMoney(value);
+}
+
+/**
+ * Share and unit counts, compacted the way a quote board writes them.
+ * A volume of zero is a real number and is kept; a missing one is an em dash.
+ */
+export function formatVolume(value: number | null | undefined): string {
+  if (value === null || value === undefined || Number.isNaN(value)) return "—";
+  const abs = Math.abs(value);
+  if (abs >= 1_000_000_000) return `${(value / 1_000_000_000).toFixed(2)}B`;
+  if (abs >= 1_000_000) return `${(value / 1_000_000).toFixed(2)}M`;
+  if (abs >= 1_000) return `${(value / 1_000).toFixed(1)}K`;
+  return value.toLocaleString("en-US", { maximumFractionDigits: 2 });
 }
 
 const dateTime = new Intl.DateTimeFormat("en-US", {

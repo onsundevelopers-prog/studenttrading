@@ -46,9 +46,10 @@ export default async function TeacherCompetitionsPage() {
         <div>
           <h1 className="text-title font-medium text-ink">Competitions</h1>
           <p className="mt-1.5 text-[12px] text-ink-tertiary">
-            Time-boxed contests. Each entrant is baselined at their portfolio
-            value when the competition is created, so the standings measure
-            performance over the window rather than since the start of term.
+            Contests with a start and an end. Each student&apos;s starting point is
+            their portfolio value when the competition was created, so the
+            standings show how they did during the contest rather than since the
+            start of term.
           </p>
         </div>
         <RefreshMarketButton classroomId={classroom.id} />
@@ -62,7 +63,7 @@ export default async function TeacherCompetitionsPage() {
             <EmptyState
               icon={<Trophy className="size-5" />}
               title="No competitions yet."
-              description="Create one above to run a ranked contest alongside the ongoing simulation."
+              description="Create one above to run a ranked contest alongside the rest of the simulation."
             />
           </PanelBody>
         </Panel>
@@ -107,12 +108,12 @@ export default async function TeacherCompetitionsPage() {
                   <tr>
                     <Th className="w-12 pl-4">Rank</Th>
                     <Th>Student</Th>
-                    <Th align="right">Opening value</Th>
-                    <Th align="right">Current value</Th>
+                    <Th align="right">Value at Start</Th>
+                    <Th align="right">Current Value</Th>
                     <Th align="right">Change</Th>
-                    <Th align="right">Return</Th>
+                    <Th align="right">Total Return</Th>
                     <Th align="right" className="pr-4">
-                      Trades
+                      Trades Placed
                     </Th>
                   </tr>
                 </thead>

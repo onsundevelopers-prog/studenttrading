@@ -19,7 +19,7 @@ export function PriceFreshness({
     return (
       <span className="hidden items-center gap-1.5 text-[11px] text-ink-tertiary sm:flex">
         <CircleAlert className="size-3.5 text-warn" />
-        No prices sampled yet
+        No prices recorded yet
       </span>
     );
   }
@@ -30,8 +30,8 @@ export function PriceFreshness({
     <Tooltip
       content={
         stale
-          ? `The newest sampled price is from ${new Date(fetchedAt).toLocaleString()}. Use refresh to update it.`
-          : `Prices were last sampled ${new Date(fetchedAt).toLocaleString()}.`
+          ? `The most recent price is from ${new Date(fetchedAt).toLocaleString()}. Use refresh to update it.`
+          : `Prices were last updated ${new Date(fetchedAt).toLocaleString()}.`
       }
     >
       <span

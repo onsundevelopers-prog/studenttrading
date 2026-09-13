@@ -33,7 +33,7 @@ export function FundRequestsPanel({ requests }: { requests: FundRequest[] }) {
       <Panel>
         <PanelHeader
           title="Fund requests"
-          description="Students asking the class bank for more capital. Approving adds it to their starting capital, not their trading P/L."
+          description="Students asking the class bank for more money. Approving it adds to the money they started with, so it never counts as trading profit."
         />
         <div className="divide-y divide-hairline">
           {requests.map((request) => (
@@ -130,7 +130,7 @@ function DecideDialog({
           }
           description={
             decision === "approved"
-              ? "The cash is added to their balance immediately and counts as starting capital, not performance."
+              ? "The money is added to their available cash immediately and counts as money they started with, not as profit they made."
               : "The student keeps their current balance and can submit a new request."
           }
         />

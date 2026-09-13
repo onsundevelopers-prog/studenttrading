@@ -21,7 +21,7 @@ import type { TradeRecord } from "@/lib/types";
 export function TransactionTable({
   trades,
   showStudent = false,
-  emptyTitle = "No trades yet.",
+  emptyTitle = "You haven't made any trades yet.",
   emptyDescription = "Every buy and sell you make will appear here.",
   className,
 }: {
@@ -48,13 +48,13 @@ export function TransactionTable({
         <tr>
           <Th className="pl-4">Time</Th>
           {showStudent ? <Th>Student</Th> : null}
-          <Th>Side</Th>
-          <Th>Asset</Th>
-          <Th align="right">Quantity</Th>
-          <Th align="right">Price</Th>
-          <Th align="right">Value</Th>
+          <Th>Buy or Sell</Th>
+          <Th>Investment</Th>
+          <Th align="right">Shares</Th>
+          <Th align="right">Price Each</Th>
+          <Th align="right">Total Value</Th>
           <Th align="right" className="pr-4">
-            Realised P/L
+            Profit/Loss from Sold Investments
           </Th>
         </tr>
       </thead>
@@ -99,7 +99,10 @@ export function TransactionTable({
             </Td>
             <Td align="right" className="pr-4">
               {trade.realizedPnl === null ? (
-                <span className="text-ink-tertiary" title="Buys do not realise a gain or loss.">
+                <span
+                  className="text-ink-tertiary"
+                  title="A purchase does not create a profit or loss by itself — it only appears when you sell."
+                >
                   —
                 </span>
               ) : (

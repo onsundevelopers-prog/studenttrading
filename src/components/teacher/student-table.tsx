@@ -28,7 +28,7 @@ export function StudentTable({
       <EmptyState
         icon={<Users className="size-5" />}
         title="No students yet."
-        description="Add students to this classroom and hand out the credentials they will use to sign in."
+        description="Add students to this classroom and give each one the username and password they will use to sign in."
       />
     );
   }
@@ -38,13 +38,13 @@ export function StudentTable({
       <thead>
         <tr>
           <Th className="pl-4">Student</Th>
-          <Th align="right">Portfolio value</Th>
-          <Th align="right">Cash</Th>
-          <Th align="right">Positions</Th>
-          <Th align="right">P/L</Th>
-          <Th align="right">Return</Th>
-          <Th align="right">Trades</Th>
-          <Th align="right">Last activity</Th>
+          <Th align="right">Portfolio Value</Th>
+          <Th align="right">Available Cash</Th>
+          <Th align="right">Investments</Th>
+          <Th align="right">Profit and Loss</Th>
+          <Th align="right">Total Return</Th>
+          <Th align="right">Trades Placed</Th>
+          <Th align="right">Last Activity</Th>
           <Th align="right" className="pr-4">
             <span className="sr-only">Actions</span>
           </Th>

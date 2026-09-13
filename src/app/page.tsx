@@ -100,7 +100,7 @@ export default async function HomePage() {
                 "Set starting capital, per student or for the whole class",
                 "Pause trading instantly, or schedule a trading window",
                 "Restrict the class to an allow-list of assets",
-                "Cap order size and concentration per position",
+                "Cap the size of an order and how much can go into one investment",
                 "See every portfolio, trade and ranking in real time",
                 "Reset one portfolio or the entire simulation",
                 "Export results as CSV",
@@ -122,7 +122,7 @@ export default async function HomePage() {
               {[
                 "Search live US stocks and major crypto pairs",
                 "Buy and sell against the current market price",
-                "Track cash, positions, cost basis and P/L",
+                "Track available cash, investments, what you paid and your profit and loss",
                 "Recorded performance history, not invented curves",
                 "Watchlists for assets they are researching",
                 "Class leaderboard ranked by real portfolio value",
@@ -156,9 +156,9 @@ export default async function HomePage() {
               ))}
             </ul>
             <div className="mt-5 border-t border-hairline pt-4 text-[12px] leading-relaxed text-ink-tertiary">
-              Prices come from Finnhub at the moment of the request. When the
-              provider is unavailable the app says so and refuses the trade
-              rather than inventing a number.
+              Prices come from our market data provider at the moment of the
+              request. When it is unavailable the app says so and refuses the
+              trade rather than inventing a number.
             </div>
           </Panel>
         </section>
@@ -213,7 +213,7 @@ export default async function HomePage() {
       <footer className="border-t border-hairline py-8">
         <div className="mx-auto max-w-6xl px-4 text-[12px] text-ink-tertiary">
           PaperDesk · A classroom stock and cryptocurrency simulator using virtual
-          money. Market data by Finnhub.
+          money. Market data by Alpaca. Financial news by Alpha Vantage.
         </div>
       </footer>
     </div>

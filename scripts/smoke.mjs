@@ -158,6 +158,9 @@ await check("/student/holdings", studentCookie, "Portfolio");
 await check("/student/activity", studentCookie, "Activity");
 await check("/student/watchlist", studentCookie, "Watchlist");
 await check("/student/leaderboard", studentCookie, "Leaderboard");
+// News is provider-backed and cached, so it renders whether or not the daily
+// Alpha Vantage allowance is still available — but it must always render.
+await check("/student/news", studentCookie, "News");
 
 console.log(
   failures === 0

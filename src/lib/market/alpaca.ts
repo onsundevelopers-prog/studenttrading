@@ -91,8 +91,8 @@ async function request<T>(
     const aborted = error instanceof Error && error.name === "TimeoutError";
     throw new AlpacaError(
       aborted
-        ? "The market data provider timed out."
-        : "Could not reach the market data provider.",
+        ? "Our market data source timed out."
+        : "We couldn't reach our market data source.",
     );
   }
 
@@ -120,7 +120,7 @@ async function request<T>(
   try {
     return (await response.json()) as T;
   } catch {
-    throw new AlpacaError("The market data provider returned malformed data.");
+    throw new AlpacaError("Our market data source returned something we couldn't read.");
   }
 }
 
@@ -307,6 +307,149 @@ export async function fetchAlpacaQuotes(
   }
 
   return { quotes, unknown };
+}
+
+// ---------------------------------------------------------------------------
+// Snapshots — the preferred quote path. One batched call per asset class that
+// carries the whole session picture per symbol: latest trade, latest quote,
+// today's OHLCV bar and the previous daily close. That last field is what makes
+// a real daily change possible, and the daily bar is where open/high/low/volume
+// come from — none of which the lightweight latest-quote call can supply.
+// ---------------------------------------------------------------------------
+export type AlpacaSnapshot = {
+  symbol: string; // internal symbol
+  price: number;
+  bid: number | null;
+  ask: number | null;
+  previousClose: number | null;
+  dayOpen: number | null;
+  dayHigh: number | null;
+  dayLow: number | null;
+  volume: number | null;
+  providerTime: Date | null;
+};
+
+type RawSessionBar = {
+  t?: string;
+  o?: number | string;
+  h?: number | string;
+  l?: number | string;
+  c?: number | string;
+  v?: number | string;
+};
+
+type RawSessionSnapshot = {
+  latestTrade?: { p?: number | string; t?: string } | null;
+  latestQuote?: { bp?: number | string; ap?: number | string; t?: string } | null;
+  dailyBar?: RawSessionBar | null;
+  prevDailyBar?: RawSessionBar | null;
+};
+
+type RawStockSnapshots = Record<string, RawSessionSnapshot | null>;
+type RawCryptoSnapshots = { snapshots?: Record<string, RawSessionSnapshot | null> };
+
+function numberOrNull(value: unknown): number | null {
+  if (value === null || value === undefined) return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+/** Strips the zeroes Alpaca sends for an absent side of the book. */
+function positiveOrNull(value: unknown): number | null {
+  const parsed = numberOrNull(value);
+  return parsed !== null && parsed > 0 ? parsed : null;
+}
+
+function snapshotFrom(
+  symbol: string,
+  raw: RawSessionSnapshot,
+): AlpacaSnapshot | null {
+  // The last trade is the honest "current price"; a session bar close is the
+  // fallback when no trade has printed yet.
+  const price = positiveOrNull(raw.latestTrade?.p) ?? positiveOrNull(raw.dailyBar?.c);
+  if (price === null) return null;
+
+  const at = (value: string | undefined) => {
+    if (!value) return null;
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  };
+
+  return {
+    symbol,
+    price,
+    bid: positiveOrNull(raw.latestQuote?.bp),
+    ask: positiveOrNull(raw.latestQuote?.ap),
+    previousClose: positiveOrNull(raw.prevDailyBar?.c),
+    dayOpen: positiveOrNull(raw.dailyBar?.o),
+    dayHigh: positiveOrNull(raw.dailyBar?.h),
+    dayLow: positiveOrNull(raw.dailyBar?.l),
+    volume: numberOrNull(raw.dailyBar?.v),
+    providerTime:
+      at(raw.latestTrade?.t) ?? at(raw.latestQuote?.t) ?? at(raw.dailyBar?.t),
+  };
+}
+
+/**
+ * Batched snapshots for many symbols. Equities and crypto are separate
+ * endpoints, so a mixed list costs at most two requests — which is what keeps a
+ * forty-row market overview inside the free tier's rate limit.
+ */
+export async function fetchAlpacaSnapshots(
+  symbols: string[],
+): Promise<{ snapshots: AlpacaSnapshot[]; unknown: string[] }> {
+  const snapshots: AlpacaSnapshot[] = [];
+  const unknown: string[] = [];
+  if (symbols.length === 0) return { snapshots, unknown };
+
+  const byAlpaca = new Map<string, string>(); // alpaca symbol -> internal
+  for (const symbol of symbols) {
+    const mapped = toAlpacaSymbol(symbol);
+    if (mapped) byAlpaca.set(mapped, symbol);
+  }
+  if (byAlpaca.size === 0) return { snapshots, unknown: symbols };
+
+  const equities: string[] = [];
+  const crypto: string[] = [];
+  for (const alpacaSymbol of byAlpaca.keys()) {
+    if (alpacaSymbol.includes("/")) crypto.push(alpacaSymbol);
+    else equities.push(alpacaSymbol);
+  }
+
+  if (equities.length > 0) {
+    const raw = await request<RawStockSnapshots>(
+      dataUrl("/stocks/snapshots", { symbols: equities.join(","), feed: "iex" }),
+      "data",
+    );
+    for (const alpacaSymbol of equities) {
+      const internal = byAlpaca.get(alpacaSymbol)!;
+      const entry = raw[alpacaSymbol];
+      const built = entry ? snapshotFrom(internal, entry) : null;
+      if (built) snapshots.push(built);
+      else unknown.push(internal);
+    }
+  }
+
+  if (crypto.length > 0) {
+    try {
+      const url = new URL(
+        `${CRYPTO_DATA_BASE_URL}/snapshots?symbols=${encodeURIComponent(crypto.join(","))}`,
+      );
+      const raw = await request<RawCryptoSnapshots>(url, "data");
+      const map = raw.snapshots ?? {};
+      for (const alpacaSymbol of crypto) {
+        const internal = byAlpaca.get(alpacaSymbol)!;
+        const entry = map[alpacaSymbol];
+        const built = entry ? snapshotFrom(internal, entry) : null;
+        if (built) snapshots.push(built);
+        else unknown.push(internal);
+      }
+    } catch {
+      for (const alpacaSymbol of crypto) unknown.push(byAlpaca.get(alpacaSymbol)!);
+    }
+  }
+
+  return { snapshots, unknown };
 }
 
 // ---------------------------------------------------------------------------

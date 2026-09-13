@@ -35,15 +35,16 @@ export default async function TeacherControlsPage() {
       <header>
         <h1 className="text-title font-medium text-ink">Simulation controls</h1>
         <p className="mt-1.5 text-[12px] text-ink-tertiary">
-          Everything on this page is enforced server-side. Hiding a button would
-          not be enough, so each rule is re-checked for every order.
+          Every rule on this page is enforced on the server for each order, so a
+          student cannot bypass it from the browser.
         </p>
       </header>
 
       {!hasFinnhubKey() ? (
         <Notice tone="neg">
-          FINNHUB_API_KEY is not set, so no live prices can be fetched. Trading is
-          blocked and portfolios will keep using their last known prices.
+          No market data provider key is configured, so live prices cannot be
+          fetched. Trading is blocked and portfolios keep their last known prices
+          until the provider is set up (see the README).
         </Notice>
       ) : null}
 
@@ -63,18 +64,18 @@ export default async function TeacherControlsPage() {
         <Panel>
           <PanelHeader
             title="Market data"
-            description="Prices are sampled from the provider and cached server-side. The snapshot record keeps the performance chart honest."
+            description="Prices are fetched from our market data source and kept on the server for a short time. Each refresh also records every student's portfolio value."
           />
           <div className="space-y-4 p-4">
             <RefreshMarketButton classroomId={classroom.id} />
             <p className="text-[12px] leading-relaxed text-ink-tertiary">
-              Refreshing prices also records one portfolio snapshot per student,
-              which is what the performance charts are drawn from. A scheduled
-              sampler is available at{" "}
+              The recorded portfolio values are what the performance charts are
+              drawn from, so refreshing prices also updates those charts. A
+              scheduled job can do this automatically at{" "}
               <code className="rounded border border-hairline bg-surface-2 px-1 py-[1px] font-mono text-[11px] text-ink-muted">
                 /api/cron/sample
               </code>{" "}
-              for deployment (see README).
+              (see README).
             </p>
           </div>
         </Panel>
@@ -82,7 +83,7 @@ export default async function TeacherControlsPage() {
         <Panel>
           <PanelHeader
             title="Export and reset"
-            description="Export before you reset: resetting permanently deletes trades, positions and snapshots for this classroom."
+            description="Export before you reset: resetting permanently deletes trades, investments and recorded portfolio values for this classroom."
           />
           <div className="space-y-4 p-4">
             <Button asChild size="md" variant="secondary">

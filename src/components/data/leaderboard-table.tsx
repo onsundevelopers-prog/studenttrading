@@ -31,8 +31,8 @@ function RankCell({ rank }: { rank: number }) {
 export function LeaderboardTable({
   rows,
   highlightStudentId,
-  emptyTitle = "No students ranked yet.",
-  emptyDescription = "Standings appear once students are enrolled and have a portfolio value.",
+  emptyTitle = "No students to rank yet.",
+  emptyDescription = "Standings appear once students have joined the class and have a portfolio value.",
 }: {
   rows: LeaderboardRow[];
   highlightStudentId?: string;
@@ -55,14 +55,14 @@ export function LeaderboardTable({
         <tr>
           <Th className="w-12 pl-4">Rank</Th>
           <Th>Student</Th>
-          <Th align="right">Portfolio value</Th>
-          <Th align="right">Cash</Th>
-          <Th align="right">Positions</Th>
-          <Th align="right">Return</Th>
-          <Th align="right">P/L</Th>
-          <Th align="right">Trades</Th>
+          <Th align="right">Portfolio Value</Th>
+          <Th align="right">Available Cash</Th>
+          <Th align="right">Investments</Th>
+          <Th align="right">Total Return</Th>
+          <Th align="right">Profit and Loss</Th>
+          <Th align="right">Trades Placed</Th>
           <Th align="right" className="pr-4">
-            Last activity
+            Last Activity
           </Th>
         </tr>
       </thead>
