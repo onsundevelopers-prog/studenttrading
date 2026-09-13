@@ -98,12 +98,28 @@ export async function signUpTeacherAction(
     classroomName: formData.get("classroomName"),
     section: formData.get("section") ?? "",
     startingCapital: formData.get("startingCapital"),
+    inviteCode: formData.get("inviteCode") ?? "",
   });
 
   if (!parsed.success) return formError(firstIssue(parsed.error));
 
-  const { fullName, email, password, classroomName, section, startingCapital } =
+  const { fullName, email, password, classroomName, section, startingCapital, inviteCode } =
     parsed.data;
+
+  // Teacher verification (invite codes). The list lives in the environment, so
+  // the check happens here and nowhere else — the form field being optional is
+  // a UI convenience, never an authorisation decision. Codes are compared
+  // case-insensitively because they get read aloud and typed by hand.
+  const validCodes = serverEnv.teacherInviteCodes;
+  if (validCodes.length > 0) {
+    const submitted = inviteCode.trim().toLowerCase();
+    const matched = validCodes.some((code) => code.toLowerCase() === submitted);
+    if (!matched) {
+      return formError(
+        "A valid invite code is required to create a teacher account. Ask the person who set up this site for one.",
+      );
+    }
+  }
 
   const admin = createAdminClient();
 

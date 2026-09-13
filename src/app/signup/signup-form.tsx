@@ -92,6 +92,23 @@ export function SignupForm() {
         />
       </FieldGroup>
 
+      <FieldGroup
+        label="Invite code"
+        htmlFor="inviteCode"
+        hint="Creating a teacher account needs an invite code from the site administrator."
+      >
+        <Input
+          id="inviteCode"
+          name="inviteCode"
+          required
+          autoCapitalize="characters"
+          autoCorrect="off"
+          spellCheck={false}
+          placeholder="TEACHER-2026"
+          className="h-9 font-mono uppercase"
+        />
+      </FieldGroup>
+
       {state && !state.ok && state.message ? (
         <div
           role="alert"

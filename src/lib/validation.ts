@@ -57,6 +57,9 @@ export const teacherSignupSchema = z.object({
     .max(80),
   section: z.string().trim().max(40).optional().default(""),
   startingCapital: startingCapitalSchema,
+  // Optional in the schema because the codes list itself is optional (local
+  // dev). Whether it is required is decided server-side, where the codes live.
+  inviteCode: z.string().trim().max(80).optional().default(""),
 });
 
 export const signInSchema = credentialsSchema;

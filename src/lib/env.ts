@@ -58,6 +58,18 @@ export const serverEnv = {
     return process.env.STUDENT_EMAIL_DOMAIN ?? "students.classroom-trading.local";
   },
   /**
+   * Comma-separated teacher invite codes. When set, creating a teacher account
+   * requires one of them; when unset, anyone may register as a teacher (the
+   * original behaviour, kept for local development).
+   */
+  get teacherInviteCodes() {
+    const raw = process.env.TEACHER_INVITE_CODES ?? "";
+    return raw
+      .split(",")
+      .map((code) => code.trim())
+      .filter((code) => code.length > 0);
+  },
+  /**
    * Alpaca keys — server only. The secret is required whenever any Alpaca
    * variable is set, so a half-configured environment fails loudly here rather
    * than mysteriously at first request.

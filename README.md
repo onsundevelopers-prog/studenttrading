@@ -341,10 +341,12 @@ Node version: CI pins 24, matching local development. Change both together.
 
 ### Known trade-offs
 
-- **Teacher signup is not email-verified.** Accounts are created already
-  confirmed so the product works without configuring transactional email. Before
-  opening signup to the public, switch `signUpTeacherAction` to Supabase's
-  standard `signUp` flow and enable email confirmation.
+- **Teacher signup is gated by invite codes, not email verification.** Set
+  `TEACHER_INVITE_CODES` (comma-separated) to require a code on the signup
+  form; leave it unset for open signup during local development. Accounts are
+  still created already-confirmed — no transactional email is needed. For
+  stronger verification, additionally switch `signUpTeacherAction` to
+  Supabase's standard `signUp` flow and enable email confirmation.
 - **Being a "teacher" grants nothing but ownership of your own classrooms.**
   Authorisation is derived from `classrooms.teacher_id` and
   `class_members.student_id`, never from a role flag, so self-signing-up as a
