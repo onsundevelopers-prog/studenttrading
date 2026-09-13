@@ -83,13 +83,14 @@ grant all on all tables in schema public to anon, authenticated, service_role;
 grant usage, select on all sequences in schema public to anon, authenticated, service_role;
 `;
 
-const MIGRATION_PATH = new URL(
+const MIGRATION_PATHS = [
   "../supabase/migrations/0001_init.sql",
-  import.meta.url,
-);
+  "../supabase/migrations/0004_fund_requests.sql",
+  "../supabase/migrations/0005_order_lifecycle.sql",
+];
 
-function loadMigration() {
-  let sql = readFileSync(MIGRATION_PATH, "utf8");
+function loadMigration(path) {
+  let sql = readFileSync(new URL(path, import.meta.url), "utf8");
   // PGlite does not ship the pgcrypto extension, and nothing in the schema
   // needs it on PostgreSQL 13+ (gen_random_uuid() is built in).
   sql = sql.replace(
@@ -156,12 +157,14 @@ async function portfolio(db, student = STUDENT_A) {
 const db = new PGlite();
 await db.waitReady;
 
-section("Applying migration");
+section("Applying migrations");
 try {
   await db.exec(AUTH_STUB);
-  await db.exec(loadMigration());
+  for (const path of MIGRATION_PATHS) {
+    await db.exec(loadMigration(path));
+  }
   await db.exec(GRANT_STUB);
-  console.log("  \u001b[32mPASS\u001b[0m migration applied cleanly");
+  console.log("  \u001b[32mPASS\u001b[0m migrations applied cleanly");
   passed += 1;
 } catch (error) {
   console.log(`  \u001b[31mFAIL\u001b[0m migration failed:\n${error.message}`);
@@ -596,6 +599,288 @@ section("Row Level Security");
   eq("a teacher cannot read another teacher's classroom", otherTeacher.rows[0].n, 0);
 
   await db.exec(`reset role;`);
+}
+
+section("Order lifecycle — limit, stop, stop-limit");
+{
+  const placed = await db.query(
+    `select public.place_order(
+       '44444444-4444-4444-4444-444444444444'::uuid, $1::uuid, 'AAPL', 'buy', 'limit', '5', '95', null, null, 'regular'
+     ) as r`,
+    [STUDENT_A],
+  );
+  eq("limit order accepted", placed.rows[0].r.ok, true);
+  eq("limit order rests pending", placed.rows[0].r.status, "pending");
+
+  const cashBefore = Number((await portfolio(db, STUDENT_A)).cash_balance);
+  check("buy reserve takes a lien on cash", cashBefore < 9450, `cash is ${cashBefore}`);
+
+  // Price above the limit: must NOT fill.
+  const noFill = await db.query(
+    `select public.fill_order($1::uuid, '96') as r`, [placed.rows[0].r.order_id],
+  );
+  eq("limit buy does not fill above its limit", noFill.rows[0].r.no_action, true);
+
+  // Price reaches the limit: fills AT the limit price, not the market price.
+  const fill = await db.query(
+    `select public.fill_order($1::uuid, '94') as r`, [placed.rows[0].r.order_id],
+  );
+  eq("limit buy fills when price reaches limit", fill.rows[0].r.status, "filled");
+  eq("limit buy fills at the limit price", fill.rows[0].r.execution_price, "95.000000");
+
+  const afterLimit = await portfolio(db, STUDENT_A);
+  // The teacher-controls section reset Ada's history, so the limit fill is the
+  // only transaction on the book right now.
+  check("a limit fill created a transaction", afterLimit.trade_count >= 1, `trade_count ${afterLimit.trade_count}`);
+
+  const execCount = await db.query(
+    `select count(*)::int as n from public.executions e join public.orders o on o.id = e.order_id
+     where o.student_id = $1::uuid`, [STUDENT_A],
+  );
+  check("executions ledger recorded the fill", execCount.rows[0].n >= 1, `got ${execCount.rows[0].n}`);
+
+  // Stop order: sell stop triggers only when price falls to the stop.
+  const stopOrder = await db.query(
+    `select public.place_order(
+       '44444444-4444-4444-4444-444444444444'::uuid, $1::uuid, 'AAPL', 'sell', 'stop', '2', null, '90', null, 'regular'
+     ) as r`,
+    [STUDENT_A],
+  );
+  eq("stop sell accepted", stopOrder.rows[0].r.ok, true);
+
+  const tooHigh = await db.query(
+    `select public.fill_order($1::uuid, '95') as r`, [stopOrder.rows[0].r.order_id],
+  );
+  eq("stop sell does not trigger above its stop", tooHigh.rows[0].r.no_action, true);
+
+  const triggered = await db.query(
+    `select public.fill_order($1::uuid, '89') as r`, [stopOrder.rows[0].r.order_id],
+  );
+  eq("stop sell triggers at the stop", triggered.rows[0].r.status, "filled");
+  eq("stop fills at the market price", triggered.rows[0].r.execution_price, "89.000000");
+
+  // Stop-limit sell: activates at the stop, only fills within the limit band.
+  const stopLimit = await db.query(
+    `select public.place_order(
+       '44444444-4444-4444-4444-444444444444'::uuid, $1::uuid, 'AAPL', 'sell', 'stop_limit', '1', '92', '90', null, 'regular'
+     ) as r`,
+    [STUDENT_A],
+  );
+  eq("stop-limit sell accepted", stopLimit.rows[0].r.ok, true);
+
+  const outsideBand = await db.query(
+    `select public.fill_order($1::uuid, '85') as r`, [stopLimit.rows[0].r.order_id],
+  );
+  eq("stop-limit sell will not fill below its limit", outsideBand.rows[0].r.no_action, true);
+
+  const cancelled = await db.query(
+    `select public.cancel_order($1::uuid, $2::uuid) as r`,
+    [stopLimit.rows[0].r.order_id, STUDENT_A],
+  );
+  eq("student cancels their own order", cancelled.rows[0].r.ok, true);
+
+  const foreignCancel = await db.query(
+    `select public.place_order(
+       '44444444-4444-4444-4444-444444444444'::uuid, $1::uuid, 'AAPL', 'buy', 'limit', '1', '90', null, null, 'regular'
+     ) as r`,
+    [STUDENT_A],
+  );
+  const steal = await db.query(
+    `select public.cancel_order($1::uuid, $2::uuid) as r`,
+    [foreignCancel.rows[0].r.order_id, STUDENT_B],
+  );
+  eq("one student cannot cancel another's order", steal.rows[0].r.ok, false);
+  eq("foreign cancel code", steal.rows[0].r.code, "FORBIDDEN");
+  await db.query(`select public.cancel_order($1::uuid, $2::uuid)`, [foreignCancel.rows[0].r.order_id, STUDENT_A]);
+}
+
+section("Buying power + market-hours controls");
+{
+  // Drain Ada's cash to a known state first.
+  await db.query(
+    `select public.reset_student_portfolio('44444444-4444-4444-4444-444444444444', $1::uuid, 1000, null) as r`,
+    [STUDENT_A],
+  );
+
+  const big = await db.query(
+    `select public.place_order(
+       '44444444-4444-4444-4444-444444444444'::uuid, $1::uuid, 'AAPL', 'buy', 'limit', '20', '100', null, null, 'regular'
+     ) as r`,
+    [STUDENT_A],
+  );
+  eq("buy beyond buying power rejected", big.rows[0].r.ok, false);
+  eq("buying power code", big.rows[0].r.code, "INSUFFICIENT_BUYING_POWER");
+
+  const affordable = await db.query(
+    `select public.place_order(
+       '44444444-4444-4444-4444-444444444444'::uuid, $1::uuid, 'AAPL', 'buy', 'limit', '5', '100', null, null, 'regular'
+     ) as r`,
+    [STUDENT_A],
+  );
+  eq("affordable order accepted", affordable.rows[0].r.ok, true);
+
+  const second = await db.query(
+    `select public.place_order(
+       '44444444-4444-4444-4444-444444444444'::uuid, $1::uuid, 'AAPL', 'buy', 'limit', '6', '100', null, null, 'regular'
+     ) as r`,
+    [STUDENT_A],
+  );
+  eq("overlapping orders cannot double-commit the same cash", second.rows[0].r.ok, false);
+
+  // Market-hours enforcement: equity orders rejected outside regular hours.
+  const closed = await db.query(
+    `select public.place_order(
+       '44444444-4444-4444-4444-444444444444'::uuid, $1::uuid, 'AAPL', 'buy', 'market', '1', null, null, null, 'closed'
+     ) as r`,
+    [STUDENT_A],
+  );
+  eq("equity order rejected while market closed", closed.rows[0].r.ok, false);
+  eq("market-closed code", closed.rows[0].r.code, "MARKET_CLOSED");
+
+  // Crypto is exempt from equity hours (spec §12).
+  const crypto247 = await db.query(
+    `select public.place_order(
+       '44444444-4444-4444-4444-444444444444'::uuid, $1::uuid, 'BINANCE:BTCUSDT', 'buy', 'market', '0.001', null, null, null, 'closed'
+     ) as r`,
+    [STUDENT_A],
+  );
+  eq("crypto trades while equities are closed", crypto247.rows[0].r.ok, true);
+  await db.query(`select public.cancel_order($1::uuid, $2::uuid)`, [crypto247.rows[0].r.order_id, STUDENT_A]);
+  await db.query(`select public.cancel_order($1::uuid, $2::uuid)`, [affordable.rows[0].r.order_id, STUDENT_A]);
+
+  // Order-type permissions.
+  await db.exec(
+    `update public.class_settings set allowed_order_types = '{market}'
+     where classroom_id = '44444444-4444-4444-4444-444444444444'`,
+  );
+  const disabled = await db.query(
+    `select public.place_order(
+       '44444444-4444-4444-4444-444444444444'::uuid, $1::uuid, 'AAPL', 'buy', 'limit', '1', '90', null, null, 'regular'
+     ) as r`,
+    [STUDENT_A],
+  );
+  eq("disabled order type rejected", disabled.rows[0].r.code, "ORDER_TYPE_DISABLED");
+  await db.exec(
+    `update public.class_settings set allowed_order_types = '{market,limit,stop,stop_limit}'
+     where classroom_id = '44444444-4444-4444-4444-444444444444'`,
+  );
+
+  // Crypto kill-switch.
+  await db.exec(
+    `update public.class_settings set crypto_enabled = false
+     where classroom_id = '44444444-4444-4444-4444-444444444444'`,
+  );
+  const noCrypto = await db.query(
+    `select public.place_order(
+       '44444444-4444-4444-4444-444444444444'::uuid, $1::uuid, 'BINANCE:BTCUSDT', 'buy', 'market', '0.001', null, null, null, 'regular'
+     ) as r`,
+    [STUDENT_A],
+  );
+  eq("crypto disabled by teacher", noCrypto.rows[0].r.code, "CRYPTO_DISABLED");
+  await db.exec(
+    `update public.class_settings set crypto_enabled = true
+     where classroom_id = '44444444-4444-4444-4444-444444444444'`,
+  );
+
+  // Emergency halt leaves working orders unfilled.
+  const resting = await db.query(
+    `select public.place_order(
+       '44444444-4444-4444-4444-444444444444'::uuid, $1::uuid, 'AAPL', 'buy', 'limit', '1', '1000', null, null, 'regular'
+     ) as r`,
+    [STUDENT_A],
+  );
+  await db.exec(
+    `update public.class_settings set trading_enabled = false
+     where classroom_id = '44444444-4444-4444-4444-444444444444'`,
+  );
+  const halted = await db.query(
+    `select public.fill_order($1::uuid, '10') as r`, [resting.rows[0].r.order_id],
+  );
+  eq("emergency halt fills nothing", halted.rows[0].r.halted, true);
+  eq("order survives a halt as pending", halted.rows[0].r.status, "pending");
+  await db.exec(
+    `update public.class_settings set trading_enabled = true
+     where classroom_id = '44444444-4444-4444-4444-444444444444'`,
+  );
+  await db.query(`select public.cancel_order($1::uuid, $2::uuid)`, [resting.rows[0].r.order_id, STUDENT_A]);
+
+  // Expiry.
+  const expiring = await db.query(
+    `select public.place_order(
+       '44444444-4444-4444-4444-444444444444'::uuid, $1::uuid, 'AAPL', 'buy', 'limit', '1', '50', null, null, 'regular'
+     ) as r`,
+    [STUDENT_A],
+  );
+  await db.exec(
+    `update public.orders set expires_at = now() - interval '1 minute' where id = '${expiring.rows[0].r.order_id}'`,
+  );
+  const expired = await db.query(`select public.expire_stale_orders() as n`);
+  check("stale orders expired", expired.rows[0].n >= 1, `got ${expired.rows[0].n}`);
+  const expiredStatus = await db.query(
+    `select status from public.orders where id = $1::uuid`, [expiring.rows[0].r.order_id],
+  );
+  eq("expired order status", expiredStatus.rows[0].status, "expired");
+}
+
+section("Teacher cash ledger");
+{
+  const grant = await db.query(
+    `select public.grant_teacher_cash('44444444-4444-4444-4444-444444444444'::uuid, $1::uuid, 2500, 'class bank', $2::uuid) as r`,
+    [STUDENT_B, TEACHER],
+  );
+  eq("teacher credit succeeds", grant.rows[0].r.ok, true);
+  eq("credit event recorded", grant.rows[0].r.event, "teacher_credit");
+
+  const debit = await db.query(
+    `select public.grant_teacher_cash('44444444-4444-4444-4444-444444444444'::uuid, $1::uuid, -100, 'fee', $2::uuid) as r`,
+    [STUDENT_B, TEACHER],
+  );
+  eq("teacher debit succeeds", debit.rows[0].r.ok, true);
+  eq("debit event recorded", debit.rows[0].r.event, "teacher_debit");
+
+  const events = await db.query(
+    `select event_type, amount from public.cash_events
+     where student_id = $1::uuid order by created_at desc limit 2`,
+    [STUDENT_B],
+  );
+  eq("ledger holds the credit", events.rows[1]?.event_type ?? events.rows[0].event_type, "teacher_credit");
+  check(
+    "amounts are positive on the ledger",
+    events.rows.every((row) => Number(row.amount) > 0),
+    JSON.stringify(events.rows),
+  );
+}
+
+section("Return-percent leaderboard ranking");
+{
+  // Give the two students different capitals and check the ranking follows
+  // percentage return, not absolute value (spec §8).
+  await db.query(
+    `select public.reset_student_portfolio('44444444-4444-4444-4444-444444444444', $1::uuid, 1000, null) as r`,
+    [STUDENT_A],
+  );
+  await db.query(
+    `select public.reset_student_portfolio('44444444-4444-4444-4444-444444444444', $1::uuid, 10000, null) as r`,
+    [STUDENT_B],
+  );
+
+  // Ada: 1000 -> 1100 (+10%). Grace: 10000 -> 10400 (+4%).
+  await trade(db, { student: STUDENT_A, symbol: "AAPL", side: "buy", qty: "1", price: "100" });
+  await db.exec(`update public.price_cache set price = 200 where symbol = 'AAPL'`);
+  await db.query(
+    `select public.grant_teacher_cash('44444444-4444-4444-4444-444444444444'::uuid, $1::uuid, 400, 'gift', null) as r`,
+    [STUDENT_B],
+  );
+
+  const lb = await db.query(`select * from public.get_leaderboard('44444444-4444-4444-4444-444444444444')`);
+  eq("the higher PERCENT return ranks first", lb.rows[0].display_name, "Ada");
+  check(
+    "percentage ranking is independent of portfolio size",
+    Number(lb.rows[0].total_value) < Number(lb.rows[1].total_value),
+    `${lb.rows[0].total_value} vs ${lb.rows[1].total_value}`,
+  );
+  eq("rank 1 is Ada", lb.rows[0].rank_position, 1);
+  eq("rank 2 is Grace", lb.rows[1].rank_position, 2);
 }
 
 section("No fabricated data");

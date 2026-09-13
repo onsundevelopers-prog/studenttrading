@@ -4,13 +4,18 @@ import { numOrNull } from "@/lib/types";
 
 import {
   fetchCompanyProfile,
-  fetchQuote,
+  fetchQuote as fetchFinnhubQuote,
   getCryptoUniverse,
   isMarketDataConfigured,
   MarketDataError,
   searchEquities,
   type SymbolSearchHit,
 } from "./finnhub";
+import {
+  fetchAlpacaBars,
+  fetchAlpacaQuotes,
+  isAlpacaConfigured,
+} from "./alpaca";
 
 /**
  * The only place in the application that talks to a market data provider.
@@ -27,6 +32,28 @@ export const HISTORY_SAMPLE_SECONDS = 300;
 
 export const MARKET_UNCONFIGURED_MESSAGE =
   "Market data is not configured. Set FINNHUB_API_KEY in your environment.";
+
+export type ExtendedQuote = Quote & {
+  bid: number | null;
+  ask: number | null;
+  volume: number | null;
+};
+
+/** Shape the quote pipeline normalises to, whichever provider supplied it. */
+type FreshQuote = {
+  symbol: string;
+  price: number;
+  change: number | null;
+  changePercent: number | null;
+  previousClose: number | null;
+  dayHigh: number | null;
+  dayLow: number | null;
+  dayOpen: number | null;
+  providerTime: Date | null;
+  bid?: number | null;
+  ask?: number | null;
+  volume?: number | null;
+};
 
 /** Re-exported so callers only need one market-data import. */
 export { isMarketDataConfigured };
@@ -135,6 +162,53 @@ async function recordCacheError(symbol: string, message: string): Promise<void> 
 }
 
 // ---------------------------------------------------------------------------
+// Historical OHLCV bars (spec §10) — real provider history, replacing the
+// "sampled by this simulator" chart where the provider supports it.
+// ---------------------------------------------------------------------------
+export type HistoricalBar = {
+  time: string; // ISO timestamp of the bar open
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume: number;
+};
+
+/**
+ * Real daily bars for a symbol, from Alpaca when configured. Returns an empty
+ * array when the provider has no history — the UI falls back to the sampled
+ * price_history series rather than inventing data.
+ */
+export async function getHistoricalBars(
+  symbol: string,
+  options: { days: number } = { days: 365 },
+): Promise<HistoricalBar[]> {
+  if (!isAlpacaConfigured()) return [];
+
+  const start = new Date();
+  start.setDate(start.getDate() - options.days);
+  start.setHours(0, 0, 0, 0);
+
+  try {
+    const bars = await fetchAlpacaBars(symbol, { start, maxBars: options.days + 5 });
+    return bars.map((bar: AlpacaBarShim) => ({
+      time: bar.t,
+      open: bar.o,
+      high: bar.h,
+      low: bar.l,
+      close: bar.c,
+      volume: bar.v,
+    }));
+  } catch {
+    // Historical data is a UI enhancement; a failure must not take down the
+    // stock page. The sampled series still renders.
+    return [];
+  }
+}
+
+type AlpacaBarShim = { t: string; o: number; h: number; l: number; c: number; v: number };
+
+// ---------------------------------------------------------------------------
 // Price history
 // ---------------------------------------------------------------------------
 /**
@@ -197,10 +271,44 @@ export async function getQuote(
   }
 
   try {
-    const fresh = await fetchQuote(key);
+    // Alpaca first (real bid/ask feed), Finnhub fallback.
+    let fresh: FreshQuote | null = null;
+    if (isAlpacaConfigured()) {
+      const alpaca = await fetchAlpacaQuotes([key]);
+      const hit = alpaca.quotes.find((q) => q.symbol === key);
+      if (hit) {
+        // Daily change needs a previous close; Alpaca's latest-quote call does
+        // not carry one, so pull it from the last cached row when present.
+        const prevClose = cached?.previous_close != null ? Number(cached.previous_close) : null;
+        fresh = {
+          symbol: key,
+          price: hit.price,
+          change: prevClose != null ? hit.price - prevClose : null,
+          changePercent:
+            prevClose != null && prevClose > 0
+              ? ((hit.price - prevClose) / prevClose) * 100
+              : null,
+          previousClose: prevClose,
+          dayHigh: null,
+          dayLow: null,
+          dayOpen: null,
+          providerTime: hit.providerTime,
+          bid: hit.bid,
+          ask: hit.ask,
+          volume: hit.volume,
+        };
+      } else if (alpaca.unknown.includes(key)) {
+        // Alpaca answered but does not know this symbol — fall through to
+        // Finnhub before declaring it unknown.
+      }
+    }
+
+    if (!fresh && isMarketDataConfigured()) {
+      fresh = await fetchFinnhubQuote(key);
+    }
 
     if (!fresh) {
-      // The provider answered, but has no such instrument.
+      // The providers answered, but have no such instrument.
       if (cached) return { ok: true, quote: rowToQuote(cached, true) };
       return {
         ok: false,

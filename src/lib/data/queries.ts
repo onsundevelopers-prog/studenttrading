@@ -1,7 +1,9 @@
 import { createAdminClient } from "@/lib/supabase/admin";
+import type { OpenOrder } from "@/lib/types";
 import {
   mapClassOverview,
   mapCompetitionStandings,
+  mapFundRequest,
   mapLeaderboard,
   mapPortfolio,
   mapTradeHistory,
@@ -12,6 +14,7 @@ import {
   type ClassSettings,
   type Competition,
   type CompetitionStanding,
+  type FundRequest,
   type LeaderboardRow,
   type Portfolio,
   type PortfolioSnapshot,
@@ -58,7 +61,7 @@ export async function loadClassroomSettings(
   const { data } = await admin
     .from("class_settings")
     .select(
-      "classroom_id, trading_enabled, paused_reason, trading_opens_at, trading_closes_at, asset_policy, max_trade_value, max_position_percent, allow_fractional, default_starting_capital",
+      "classroom_id, trading_enabled, paused_reason, trading_opens_at, trading_closes_at, asset_policy, max_trade_value, max_position_percent, allow_fractional, allowed_order_types, enforce_market_hours, allow_extended_hours, crypto_enabled, short_selling_enabled, options_enabled, default_starting_capital",
     )
     .eq("classroom_id", classroomId)
     .maybeSingle();
@@ -76,6 +79,14 @@ export async function loadClassroomSettings(
     maxPositionPercent:
       data.max_position_percent === null ? null : num(data.max_position_percent),
     allowFractional: data.allow_fractional,
+    allowedOrderTypes: (data.allowed_order_types ?? [
+      "market",
+    ]) as ClassSettings["allowedOrderTypes"],
+    enforceMarketHours: data.enforce_market_hours,
+    allowExtendedHours: data.allow_extended_hours,
+    cryptoEnabled: data.crypto_enabled,
+    shortSellingEnabled: data.short_selling_enabled,
+    optionsEnabled: data.options_enabled,
   };
 }
 
@@ -137,6 +148,89 @@ export async function loadTradeHistory(options: {
   });
   if (error) return [];
   return mapTradeHistory(data);
+}
+
+/**
+ * Fund requests for a classroom, newest first.
+ *
+ * For students this must be called with `studentId` set — the page passes the
+ * session's own id — and the server actions re-verify membership before any
+ * write. The join brings the student's name so the teacher's queue can label
+ * each row without a second round trip.
+ */
+export async function loadFundRequests(options: {
+  classroomId: string;
+  studentId?: string | null;
+  status?: "pending" | "approved" | "denied";
+  limit?: number;
+}): Promise<FundRequest[]> {
+  const admin = createAdminClient();
+
+  let query = admin
+    .from("fund_requests")
+    .select(
+      "id, classroom_id, student_id, amount, reason, status, created_at, decided_at, profiles ( full_name, login_handle )",
+    )
+    .eq("classroom_id", options.classroomId)
+    .order("created_at", { ascending: false })
+    .limit(options.limit ?? 50);
+
+  if (options.studentId) query = query.eq("student_id", options.studentId);
+  if (options.status) query = query.eq("status", options.status);
+
+  const { data } = await query;
+
+  return (data ?? []).map((row) => {
+    const profile = Array.isArray(row.profiles) ? row.profiles[0] : row.profiles;
+    return mapFundRequest({
+      id: row.id,
+      classroom_id: row.classroom_id,
+      student_id: row.student_id,
+      amount: row.amount,
+      reason: row.reason,
+      status: row.status,
+      created_at: row.created_at,
+      decided_at: row.decided_at,
+      student_name: profile?.full_name ?? "Student",
+      handle: profile?.login_handle ?? null,
+    });
+  });
+}
+
+/** The student's working (resting) orders, oldest first. */
+export async function loadOpenOrders(
+  classroomId: string,
+  studentId: string,
+): Promise<OpenOrder[]> {
+  const admin = createAdminClient();
+  const { data } = await admin
+    .from("orders")
+    .select(
+      "id, side, quantity, price, filled_quantity, order_type, limit_price, stop_price, status, created_at, assets ( symbol, display_symbol )",
+    )
+    .eq("classroom_id", classroomId)
+    .eq("student_id", studentId)
+    .in("status", ["pending", "partially_filled"])
+    .order("created_at", { ascending: true })
+    .limit(50);
+
+  return (data ?? []).map((row) => {
+    const asset = Array.isArray(row.assets) ? row.assets[0] : row.assets;
+    return {
+      id: row.id,
+      symbol: String(asset?.symbol ?? ""),
+      displaySymbol: String(asset?.display_symbol ?? ""),
+      side: row.side as "buy" | "sell",
+      quantity: num(row.quantity),
+      filledQuantity: num(row.filled_quantity),
+      price: num(row.price),
+      limitPrice: row.limit_price === null ? null : num(row.limit_price),
+      stopPrice: row.stop_price === null ? null : num(row.stop_price),
+      orderType: row.order_type as OpenOrder["orderType"],
+      status: row.status as OpenOrder["status"],
+      createdAt: row.created_at,
+    };
+  });
 }
 
 export async function loadSnapshots(

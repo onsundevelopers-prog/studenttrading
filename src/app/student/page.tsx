@@ -8,6 +8,7 @@ import { PortfolioSummary } from "@/components/data/portfolio-summary";
 import { TransactionTable } from "@/components/data/transaction-table";
 import { AssetSearch } from "@/components/market/asset-search";
 import { WatchlistCard } from "@/components/market/watchlist-panel";
+import { RequestFundsCard } from "@/components/student/request-funds-card";
 import { refreshStudentMarketAction } from "@/lib/actions/market";
 import { Button } from "@/components/ui/button";
 import {
@@ -18,6 +19,7 @@ import {
 } from "@/components/ui/primitives";
 import { getStudentWorkspace } from "@/lib/auth/context";
 import {
+  loadFundRequests,
   loadHeldSymbols,
   loadLeaderboard,
   loadPortfolio,
@@ -40,13 +42,15 @@ export default async function StudentDashboardPage() {
     await getQuotes(heldSymbols);
   }
 
-  const [portfolio, snapshots, trades, watchlist, leaderboard] = await Promise.all([
-    loadPortfolio(classroom.id, session.userId),
-    loadSnapshots(classroom.id, session.userId, 400),
-    loadTradeHistory({ classroomId: classroom.id, studentId: session.userId, limit: 6 }),
-    loadWatchlist(classroom.id, session.userId),
-    loadLeaderboard(classroom.id),
-  ]);
+  const [portfolio, snapshots, trades, watchlist, leaderboard, fundRequests] =
+    await Promise.all([
+      loadPortfolio(classroom.id, session.userId),
+      loadSnapshots(classroom.id, session.userId, 400),
+      loadTradeHistory({ classroomId: classroom.id, studentId: session.userId, limit: 6 }),
+      loadWatchlist(classroom.id, session.userId),
+      loadLeaderboard(classroom.id),
+      loadFundRequests({ classroomId: classroom.id, studentId: session.userId, limit: 10 }),
+    ]);
 
   if (!portfolio) return null;
 
@@ -166,6 +170,12 @@ export default async function StudentDashboardPage() {
             classroomId={classroom.id}
             entries={watchlist}
             quotes={watchQuotes}
+          />
+
+          <RequestFundsCard
+            classroomId={classroom.id}
+            cashBalance={portfolio.cashBalance}
+            requests={fundRequests}
           />
 
           <Panel>

@@ -2,14 +2,16 @@ import { Download } from "lucide-react";
 import Link from "next/link";
 
 import { AddStudentsForm } from "@/components/teacher/add-students-form";
+import { FundRequestsPanel } from "@/components/teacher/fund-requests-panel";
 import { JoinCodeCard } from "@/components/teacher/join-code-card";
 import { StudentTable } from "@/components/teacher/student-table";
 import { Button } from "@/components/ui/button";
 import { Panel, PanelHeader } from "@/components/ui/primitives";
 import { getTeacherWorkspace } from "@/lib/auth/context";
 import {
-  loadHeldSymbols,
   loadDefaultStartingCapital,
+  loadFundRequests,
+  loadHeldSymbols,
   loadPriceFreshness,
   loadStudents,
 } from "@/lib/data/queries";
@@ -26,9 +28,10 @@ export default async function TeacherStudentsPage() {
     if (symbols.length > 0) await getQuotes(symbols);
   }
 
-  const [students, defaultCapital] = await Promise.all([
+  const [students, defaultCapital, pendingRequests] = await Promise.all([
     loadStudents(classroom.id),
     loadDefaultStartingCapital(classroom.id),
+    loadFundRequests({ classroomId: classroom.id, status: "pending", limit: 25 }),
   ]);
 
   const classValue = students.reduce((sum, student) => sum + student.totalValue, 0);
@@ -63,6 +66,10 @@ export default async function TeacherStudentsPage() {
           </Link>
         </Button>
       </header>
+
+      {pendingRequests.length > 0 ? (
+        <FundRequestsPanel requests={pendingRequests} />
+      ) : null}
 
       <div className="grid gap-5 xl:grid-cols-3">
         <div className="xl:col-span-2">

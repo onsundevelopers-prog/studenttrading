@@ -4,6 +4,8 @@ import { notFound } from "next/navigation";
 
 import { AssetMark, PriceChange } from "@/components/data/atoms";
 import { PriceChart } from "@/components/data/charts";
+import { BarChartPanel, VolumeChart } from "@/components/market/bar-chart-panel";
+import { CancelOrderButton } from "@/components/market/cancel-order-button";
 import { TransactionTable } from "@/components/data/transaction-table";
 import { TradePanel } from "@/components/market/trade-panel";
 import { AddToWatchlistButton } from "@/components/market/watchlist-panel";
@@ -16,17 +18,18 @@ import {
   PanelBody,
   PanelHeader,
 } from "@/components/ui/primitives";
-import { getStudentWorkspace } from "@/lib/auth/context";
-import {
+import { getStudentWorkspace } from "@/lib/auth/context";import {
   isAssetPermitted,
   loadAssetById,
   loadClassroomSettings,
+  loadOpenOrders,
   loadPortfolio,
   loadPriceHistoryForAssets,
   loadTradeHistory,
   loadWatchlist,
 } from "@/lib/data/queries";
-import { ensureAsset, getQuote } from "@/lib/market/service";
+import { getHistoricalBars, ensureAsset, getQuote } from "@/lib/market/service";
+import { getMarketStatusFor } from "@/lib/market/market-status";
 import { formatPrice } from "@/lib/format";
 
 /**
@@ -60,16 +63,23 @@ export default async function AssetDetailPage({
 
   if (!asset || !portfolio) notFound();
 
-  const [history, trades, permitted] = await Promise.all([
+  const [history, trades, permitted, bars, openOrders, marketStatus] = await Promise.all([
     loadPriceHistoryForAssets([asset.id], 24 * 14),
     loadTradeHistory({ classroomId: classroom.id, studentId: session.userId, limit: 12 }),
     isAssetPermitted(classroom.id, asset.symbol),
+    getHistoricalBars(asset.symbol, { days: 365 }),
+    loadOpenOrders(classroom.id, session.userId),
+    getMarketStatusFor(asset.assetType),
   ]);
 
   const points = history.get(asset.id) ?? [];
   const quote = quoteResult.ok ? quoteResult.quote : null;
   const holding = portfolio.holdings.find((item) => item.assetId === asset.id);
   const assetTrades = trades.filter((trade) => trade.symbol === asset.symbol);
+  const assetOpenOrders = openOrders.filter((order) => order.symbol === asset.symbol);
+  // Real provider history renders when available; otherwise the sampled series
+  // is shown with its existing honest empty state.
+  const chartBars = bars.length >= 2 ? bars : null;
 
   return (
     <div className="space-y-5">
@@ -140,11 +150,17 @@ export default async function AssetDetailPage({
         <div className="space-y-5 xl:col-span-2">
           <Panel>
             <PanelHeader
-              title="Price history"
-              description="Sampled by this simulator. The market data provider does not expose historical candles on the current plan, so this series is what has actually been observed."
+              title={chartBars ? "Price history · 1Y daily" : "Price history"}
+              description={
+                chartBars
+                  ? "Real daily candles from the market data provider."
+                  : "Sampled by this simulator. Historical candles are unavailable for this symbol, so this series is what has actually been observed."
+              }
             />
             <PanelBody>
-              {points.length >= 2 ? (
+              {chartBars ? (
+                <BarChartPanel bars={chartBars} assetType={asset.assetType} />
+              ) : points.length >= 2 ? (
                 <PriceChart points={points} assetType={asset.assetType} />
               ) : (
                 <EmptyState
@@ -159,6 +175,15 @@ export default async function AssetDetailPage({
               )}
             </PanelBody>
           </Panel>
+
+          {chartBars ? (
+            <Panel>
+              <PanelHeader title="Volume" description="Shares or units traded per day, from the provider." />
+              <PanelBody>
+                <VolumeChart bars={chartBars} />
+              </PanelBody>
+            </Panel>
+          ) : null}
 
           <Panel>
             <PanelHeader
@@ -195,7 +220,38 @@ export default async function AssetDetailPage({
               allowFractional={settings?.allowFractional ?? true}
               maxTradeValue={settings?.maxTradeValue ?? null}
               maxPositionPercent={settings?.maxPositionPercent ?? null}
+              allowedOrderTypes={settings?.allowedOrderTypes ?? ["market"]}
+              marketOpen={marketStatus.tradingAllowed || !settings?.enforceMarketHours}
             />
+
+            {assetOpenOrders.length > 0 ? (
+              <Panel>
+                <PanelHeader title="Working orders" description="Resting until your price is reached, or cancelled. Cancellation is immediate." />
+                <PanelBody className="space-y-2">
+                  {assetOpenOrders.map((order) => (
+                    <div
+                      key={order.id}
+                      className="flex items-center justify-between rounded-md border border-hairline bg-surface-2 px-3 py-2 text-[12px]"
+                    >
+                      <div>
+                        <span className="font-medium capitalize text-ink">
+                          {order.side} {order.orderType.replace("_", "-")}
+                        </span>
+                        <span className="num ml-2 text-ink-muted">
+                          {order.quantity} @ {formatPrice(order.limitPrice ?? order.stopPrice ?? order.price, asset.assetType)}
+                        </span>
+                        {order.filledQuantity > 0 && order.filledQuantity < order.quantity ? (
+                          <span className="num ml-2 text-warn">
+                            {order.filledQuantity} filled
+                          </span>
+                        ) : null}
+                      </div>
+                      <CancelOrderButton orderId={order.id} />
+                    </div>
+                  ))}
+                </PanelBody>
+              </Panel>
+            ) : null}
           </Panel>
 
           <Panel>

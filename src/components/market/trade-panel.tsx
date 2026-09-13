@@ -4,11 +4,13 @@ import { CircleAlert, CircleCheck, LoaderCircle } from "lucide-react";
 import * as React from "react";
 import { useActionState } from "react";
 
+import { placeOrderAction, type OrderActionState } from "@/lib/actions/orders";
+
 import { Button } from "@/components/ui/button";
 import { FieldGroup, Input } from "@/components/ui/field";
 import { Badge, Notice } from "@/components/ui/primitives";
-import { executeTradeAction, type TradeActionState } from "@/lib/actions/trading";
 import { formatMoney, formatPrice, formatQuantity } from "@/lib/format";
+import type { OrderType } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 type Side = "buy" | "sell";
@@ -36,6 +38,8 @@ export function TradePanel({
   allowFractional,
   maxTradeValue,
   maxPositionPercent,
+  allowedOrderTypes = ["market"],
+  marketOpen = true,
 }: {
   classroomId: string;
   symbol: string;
@@ -51,12 +55,19 @@ export function TradePanel({
   allowFractional: boolean;
   maxTradeValue: number | null;
   maxPositionPercent: number | null;
+  allowedOrderTypes?: OrderType[];
+  marketOpen?: boolean;
 }) {
-  const [state, formAction, isPending] = useActionState<TradeActionState, FormData>(
-    executeTradeAction,
+  const [state, formAction, isPending] = useActionState<OrderActionState, FormData>(
+    placeOrderAction,
     null,
   );
   const [side, setSide] = React.useState<Side>("buy");
+  const [orderType, setOrderType] = React.useState<OrderType>(
+    allowedOrderTypes.includes("market") ? "market" : allowedOrderTypes[0] ?? "market",
+  );
+  const [limitPrice, setLimitPrice] = React.useState("");
+  const [stopPrice, setStopPrice] = React.useState("");
   const [quantity, setQuantity] = React.useState("");
   const [idempotencyKey, setIdempotencyKey] = React.useState(() =>
     crypto.randomUUID(),
@@ -71,13 +82,17 @@ export function TradePanel({
   const [settledState, setSettledState] = React.useState(state);
   if (state !== settledState) {
     setSettledState(state);
-    if (state?.ok) {
+    if (state?.ok && state.status !== "pending") {
       setIdempotencyKey(crypto.randomUUID());
       setQuantity("");
+      setLimitPrice("");
+      setStopPrice("");
     }
   }
 
-  const disabled = !tradingEnabled || !permitted || price === null || priceStale;
+  const disabled =
+    !tradingEnabled || !permitted || price === null || priceStale ||
+    (assetType === "stock" && !marketOpen && orderType === "market");
 
   const parsedQuantity = Number(quantity);
   const quantityValid =
@@ -181,6 +196,76 @@ export function TradePanel({
         <input type="hidden" name="side" value={side} />
         <input type="hidden" name="idempotencyKey" value={idempotencyKey} />
 
+        {allowedOrderTypes.length > 1 ? (
+          <FieldGroup label="Order type" htmlFor="orderType">
+            <select
+              id="orderType"
+              name="orderType"
+              value={orderType}
+              disabled={disabled || isPending}
+              onChange={(event) => setOrderType(event.target.value as OrderType)}
+              className="h-9 w-full rounded-md border border-hairline bg-surface-2 px-2 text-[13px] text-ink"
+            >
+              {(
+                [
+                  ["market", "Market — fill now"],
+                  ["limit", "Limit — at my price or better"],
+                  ["stop", "Stop — market once stop hits"],
+                  ["stop_limit", "Stop-limit — stop activates a limit"],
+                ] as const
+              )
+                .filter(([value]) => allowedOrderTypes.includes(value))
+                .map(([value, label]) => (
+                  <option key={value} value={value}>
+                    {label}
+                  </option>
+                ))}
+            </select>
+          </FieldGroup>
+        ) : (
+          <input type="hidden" name="orderType" value={allowedOrderTypes[0] ?? "market"} />
+        )}
+
+        {orderType === "limit" || orderType === "stop_limit" ? (
+          <FieldGroup
+            label="Limit price"
+            htmlFor="limitPrice"
+            hint="Highest price you will pay, or lowest you will accept."
+          >
+            <Input
+              id="limitPrice"
+              name="limitPrice"
+              inputMode="decimal"
+              autoComplete="off"
+              placeholder={price !== null ? formatPrice(price, assetType) : "0.00"}
+              value={limitPrice}
+              disabled={disabled || isPending}
+              onChange={(event) => setLimitPrice(event.target.value)}
+              className="h-9 num"
+            />
+          </FieldGroup>
+        ) : null}
+
+        {orderType === "stop" || orderType === "stop_limit" ? (
+          <FieldGroup
+            label="Stop price"
+            htmlFor="stopPrice"
+            hint="The trigger price that activates this order."
+          >
+            <Input
+              id="stopPrice"
+              name="stopPrice"
+              inputMode="decimal"
+              autoComplete="off"
+              placeholder={price !== null ? formatPrice(price, assetType) : "0.00"}
+              value={stopPrice}
+              disabled={disabled || isPending}
+              onChange={(event) => setStopPrice(event.target.value)}
+              className="h-9 num"
+            />
+          </FieldGroup>
+        ) : null}
+
         <FieldGroup
           label="Quantity"
           htmlFor="trade-quantity"
@@ -268,8 +353,10 @@ export function TradePanel({
               <LoaderCircle className="animate-spin" />
               Placing…
             </>
-          ) : (
+          ) : orderType === "market" ? (
             `${side === "buy" ? "Buy" : "Sell"} ${displaySymbol}`
+          ) : (
+            `Place ${orderType.replace("_", "-")} order`
           )}
         </Button>
       </form>

@@ -338,6 +338,12 @@ export async function updateClassSettingsAction(
     maxTradeValue: (formData.get("maxTradeValue") ?? "") as string | number,
     maxPositionPercent: (formData.get("maxPositionPercent") ?? "") as string | number,
     allowFractional: formData.get("allowFractional") === "on",
+    allowedOrderTypes: formData.getAll("allowedOrderTypes").map(String),
+    enforceMarketHours: formData.get("enforceMarketHours") === "on",
+    allowExtendedHours: formData.get("allowExtendedHours") === "on",
+    cryptoEnabled: formData.get("cryptoEnabled") === "on",
+    shortSellingEnabled: formData.get("shortSellingEnabled") === "on",
+    optionsEnabled: formData.get("optionsEnabled") === "on",
   });
 
   if (!parsed.success) return formError(firstIssue(parsed.error));
@@ -374,6 +380,17 @@ export async function updateClassSettingsAction(
           ? null
           : String(parsed.data.maxPositionPercent),
       allow_fractional: parsed.data.allowFractional,
+      allowed_order_types:
+        parsed.data.allowedOrderTypes.length > 0
+          ? parsed.data.allowedOrderTypes
+          : ["market"],
+      enforce_market_hours: parsed.data.enforceMarketHours,
+      allow_extended_hours: parsed.data.allowExtendedHours,
+      crypto_enabled: parsed.data.cryptoEnabled,
+      short_selling_enabled: parsed.data.shortSellingEnabled,
+      // Options are always hard-disabled in the engine; the flag exists so the
+      // teacher control is honest about what the class is allowed to try.
+      options_enabled: false,
       updated_at: new Date().toISOString(),
     })
     .eq("classroom_id", classroomId);
@@ -443,7 +460,9 @@ export async function adjustCashAction(
   }
 
   const admin = createAdminClient();
-  const { data, error } = await admin.rpc("adjust_cash", {
+  // grant_teacher_cash wraps adjust_cash and records the money as an explicit
+  // teacher_credit / teacher_debit ledger event (spec §7).
+  const { data, error } = await admin.rpc("grant_teacher_cash", {
     p_classroom_id: classroomId,
     p_student_id: studentId,
     p_delta: delta.toString(),
@@ -459,7 +478,7 @@ export async function adjustCashAction(
   }
 
   revalidateTeacher();
-  return formSuccess("Balance adjusted.");
+  return formSuccess("Balance adjusted. Recorded in the cash ledger.");
 }
 
 export async function resetStudentAction(

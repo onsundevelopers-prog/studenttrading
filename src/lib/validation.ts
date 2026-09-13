@@ -131,6 +131,17 @@ export const classSettingsSchema = z.object({
     .optional()
     .default(""),
   allowFractional: z.coerce.boolean(),
+  // Extended controls (spec §7): at least one order type must stay enabled,
+  // otherwise no order could ever be placed.
+  allowedOrderTypes: z
+    .array(z.enum(["market", "limit", "stop", "stop_limit"]))
+    .max(4)
+    .default(["market"]),
+  enforceMarketHours: z.coerce.boolean(),
+  allowExtendedHours: z.coerce.boolean(),
+  cryptoEnabled: z.coerce.boolean(),
+  shortSellingEnabled: z.coerce.boolean(),
+  optionsEnabled: z.coerce.boolean(),
 });
 
 export const classPermissionsSchema = z.object({
@@ -171,6 +182,54 @@ export const watchlistSchema = z.object({
   classroomId: z.uuid("Invalid classroom."),
   symbol: z.string().trim().min(1).max(60),
 });
+
+/**
+ * A student asking the class bank for capital. The amount is parsed as a string
+ * so it reaches the numeric column intact, and the server caps it per class
+ * settings — never an assumed limit.
+ */
+export const requestFundsSchema = z.object({
+  classroomId: z.uuid("Invalid classroom."),
+  amount: z
+    .string()
+    .trim()
+    .regex(/^\d{1,9}(\.\d{1,2})?$/, "Enter an amount with up to two decimal places."),
+  reason: z.string().trim().max(200, "Keep the reason under 200 characters.").optional().default(""),
+});
+
+export const decideFundRequestSchema = z.object({
+  requestId: z.uuid("Invalid request."),
+  decision: z.enum(["approved", "denied"]),
+});
+
+/** Prices are parsed as strings so they reach the numeric columns intact. */
+const orderPriceSchema = z
+  .string()
+  .trim()
+  .regex(/^\d{1,10}(\.\d{1,4})?$/, "Enter a valid price.");
+
+/** Extended order intake: market, limit, stop, stop-limit (spec §4). */
+export const placeOrderSchema = z
+  .object({
+    classroomId: z.uuid("Invalid classroom."),
+    symbol: z.string().trim().min(1, "Pick an asset.").max(60),
+    side: z.enum(["buy", "sell"]),
+    orderType: z.enum(["market", "limit", "stop", "stop_limit"]),
+    quantity: quantitySchema,
+    limitPrice: orderPriceSchema.optional().or(z.literal("")),
+    stopPrice: orderPriceSchema.optional().or(z.literal("")),
+    idempotencyKey: z.string().trim().max(64).optional(),
+  })
+  .refine(
+    (data) => !(data.orderType === "limit" || data.orderType === "stop_limit") ||
+      Boolean(data.limitPrice),
+    { message: "A limit price is required for this order type.", path: ["limitPrice"] },
+  )
+  .refine(
+    (data) => !(data.orderType === "stop" || data.orderType === "stop_limit") ||
+      Boolean(data.stopPrice),
+    { message: "A stop price is required for this order type.", path: ["stopPrice"] },
+  );
 
 export const removeWatchlistItemSchema = z.object({
   classroomId: z.uuid("Invalid classroom."),

@@ -11,6 +11,14 @@
 export type AssetType = "stock" | "crypto";
 export type Role = "teacher" | "student";
 export type TradeSide = "buy" | "sell";
+export type OrderType = "market" | "limit" | "stop" | "stop_limit";
+export type OrderStatus =
+  | "pending"
+  | "partially_filled"
+  | "filled"
+  | "cancelled"
+  | "rejected"
+  | "expired";
 
 export type Profile = {
   id: string;
@@ -39,6 +47,12 @@ export type ClassSettings = {
   maxTradeValue: number | null;
   maxPositionPercent: number | null;
   allowFractional: boolean;
+  allowedOrderTypes: OrderType[];
+  enforceMarketHours: boolean;
+  allowExtendedHours: boolean;
+  cryptoEnabled: boolean;
+  shortSellingEnabled: boolean;
+  optionsEnabled: boolean;
 };
 
 export type Holding = {
@@ -183,6 +197,36 @@ export type Quote = {
 export type PricePoint = {
   capturedAt: string;
   price: number;
+};
+
+/** A working (resting) order on the student's book. */
+export type OpenOrder = {
+  id: string;
+  symbol: string;
+  displaySymbol: string;
+  side: "buy" | "sell";
+  quantity: number;
+  filledQuantity: number;
+  price: number;
+  limitPrice: number | null;
+  stopPrice: number | null;
+  orderType: OrderType;
+  status: OrderStatus;
+  createdAt: string;
+};
+
+/** A student's request for more capital from the class bank. */
+export type FundRequest = {
+  id: string;
+  classroomId: string;
+  studentId: string;
+  studentName: string;
+  handle: string | null;
+  amount: number;
+  reason: string;
+  status: "pending" | "approved" | "denied";
+  createdAt: string;
+  decidedAt: string | null;
 };
 
 /** A student login the teacher has to hand out. Returned once, at creation. */
@@ -337,6 +381,21 @@ function mapTrade(row: unknown): TradeRecord {
 export function mapTradeHistory(raw: unknown): TradeRecord[] {
   if (!Array.isArray(raw)) return [];
   return raw.map(mapTrade);
+}
+
+export function mapFundRequest(row: Record<string, unknown>): FundRequest {
+  return {
+    id: String(row.id),
+    classroomId: String(row.classroom_id),
+    studentId: String(row.student_id),
+    studentName: String(row.student_name ?? "Student"),
+    handle: (row.handle as string | null) ?? null,
+    amount: num(row.amount as string),
+    reason: String(row.reason ?? ""),
+    status: row.status as FundRequest["status"],
+    createdAt: String(row.created_at),
+    decidedAt: (row.decided_at as string | null) ?? null,
+  };
 }
 
 export function mapClassOverview(raw: unknown): ClassOverview | null {

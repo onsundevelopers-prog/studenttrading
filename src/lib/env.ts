@@ -57,7 +57,36 @@ export const serverEnv = {
   get studentEmailDomain() {
     return process.env.STUDENT_EMAIL_DOMAIN ?? "students.classroom-trading.local";
   },
+  /**
+   * Alpaca keys — server only. The secret is required whenever any Alpaca
+   * variable is set, so a half-configured environment fails loudly here rather
+   * than mysteriously at first request.
+   */
+  get alpacaApiKey() {
+    return required("ALPACA_API_KEY", process.env.ALPACA_API_KEY);
+  },
+  get alpacaSecretKey() {
+    return required("ALPACA_SECRET_KEY", process.env.ALPACA_SECRET_KEY);
+  },
+  /** Only the paper environment is supported, and only "true" is accepted. */
+  get alpacaPaper() {
+    const raw = (process.env.ALPACA_PAPER ?? "true").trim().toLowerCase();
+    if (raw !== "true") {
+      throw new Error(
+        "ALPACA_PAPER must be \"true\". This product is a classroom simulator and " +
+          "only ever talks to Alpaca's paper-trading environment.",
+      );
+    }
+    return true;
+  },
 } as const;
+
+/** True when Alpaca credentials are present, without throwing. */
+export function hasAlpacaKeys(): boolean {
+  return Boolean(
+    process.env.ALPACA_API_KEY?.trim() && process.env.ALPACA_SECRET_KEY?.trim(),
+  );
+}
 
 export function hasFinnhubKey(): boolean {
   return Boolean(process.env.FINNHUB_API_KEY);

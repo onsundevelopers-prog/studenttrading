@@ -197,6 +197,74 @@ export function ClassSettingsForm({
             </div>
           </div>
 
+          <fieldset className="space-y-3">
+            <legend className="text-[12px] font-medium text-ink">
+              Allowed order types
+            </legend>
+            <div className="grid gap-2 sm:grid-cols-2">
+              {(
+                [
+                  ["market", "Market orders", "Fill immediately at the live price."],
+                  ["limit", "Limit orders", "Fill only at the limit price or better."],
+                  ["stop", "Stop orders", "Become market orders once the stop price is hit."],
+                  ["stop_limit", "Stop-limit orders", "Activate at the stop, fill within the limit."],
+                ] as const
+              ).map(([value, label, hint]) => (
+                <Checkbox
+                  key={value}
+                  name="allowedOrderTypes"
+                  value={value}
+                  label={label}
+                  hint={hint}
+                  defaultChecked={settings.allowedOrderTypes.includes(value)}
+                />
+              ))}
+            </div>
+          </fieldset>
+
+          <fieldset className="space-y-3">
+            <legend className="text-[12px] font-medium text-ink">
+              Market rules
+            </legend>
+            <div className="grid gap-2 sm:grid-cols-2">
+              <Checkbox
+                name="enforceMarketHours"
+                value="on"
+                label="Enforce US market hours"
+                hint="Stock orders are rejected outside regular hours. Crypto is always open."
+                defaultChecked={settings.enforceMarketHours}
+              />
+              <Checkbox
+                name="allowExtendedHours"
+                value="on"
+                label="Allow extended-hours trading"
+                hint="Permit pre-market and after-hours stock orders too."
+                defaultChecked={settings.allowExtendedHours}
+              />
+              <Checkbox
+                name="cryptoEnabled"
+                value="on"
+                label="Allow crypto trading"
+                hint="Crypto trades 24/7 and is never restricted by equity hours."
+                defaultChecked={settings.cryptoEnabled}
+              />
+              <Checkbox
+                name="shortSellingEnabled"
+                value="on"
+                label="Allow short selling (flag only)"
+                hint="Recorded as a class preference; the engine does not support shorts yet."
+                defaultChecked={settings.shortSellingEnabled}
+              />
+              <Checkbox
+                name="optionsEnabled"
+                value="on"
+                label="Allow options (flag only)"
+                hint="Recorded as a class preference; the engine does not support options."
+                defaultChecked={settings.optionsEnabled}
+              />
+            </div>
+          </fieldset>
+
           <Feedback state={state} />
 
           <div className="flex flex-wrap items-center gap-3 border-t border-hairline pt-4">
