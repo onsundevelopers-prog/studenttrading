@@ -22,7 +22,6 @@ import {
   loadFundRequests,
   loadHeldSymbols,
   loadLeaderboard,
-  loadPortfolio,
   loadPriceFreshness,
   loadSnapshots,
   loadTradeHistory,
@@ -31,8 +30,8 @@ import {
 import { getQuotes } from "@/lib/market/service";
 
 export default async function StudentDashboardPage() {
-  const { classroom, settings, session } = await getStudentWorkspace();
-  if (!classroom) return null;
+  const { classroom, settings, session, portfolio } = await getStudentWorkspace();
+  if (!classroom || !portfolio) return null;
 
   // Refresh before reading the portfolio, so the figures on screen are the ones
   // derived from current prices rather than the last render's.
@@ -42,17 +41,14 @@ export default async function StudentDashboardPage() {
     await getQuotes(heldSymbols);
   }
 
-  const [portfolio, snapshots, trades, watchlist, leaderboard, fundRequests] =
+  const [snapshots, trades, watchlist, leaderboard, fundRequests] =
     await Promise.all([
-      loadPortfolio(classroom.id, session.userId),
       loadSnapshots(classroom.id, session.userId, 400),
       loadTradeHistory({ classroomId: classroom.id, studentId: session.userId, limit: 6 }),
       loadWatchlist(classroom.id, session.userId),
       loadLeaderboard(classroom.id),
       loadFundRequests({ classroomId: classroom.id, studentId: session.userId, limit: 10 }),
     ]);
-
-  if (!portfolio) return null;
 
   const watchQuotes = watchlist.length
     ? (await getQuotes(watchlist.map((entry) => entry.asset.symbol))).quotes
